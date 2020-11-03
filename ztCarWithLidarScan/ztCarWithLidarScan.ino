@@ -158,7 +158,7 @@ void scanRotor() {
     }
     if (angleValue > 768) { // looking right
       scanMode = false;
-      homeRotor();
+      mtrM->setSpeed(0);
     }
     if (dist > 1200) {  // 12 m max indoor distance
       dist = 1200;
