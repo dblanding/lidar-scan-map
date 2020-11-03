@@ -133,8 +133,8 @@ void homeRotor() {
     if (error > 255) {
       error = 255;
     }
-    if (error < 30) {
-      error = 30;
+    if (error < 40) {
+      error = 40;
     }
     mtrM->setSpeed(error);
   }
@@ -152,7 +152,7 @@ void scanRotor() {
     // uint16_t strength = tfmini.getRecentSignalStrength();
     // read shaft angle in bits
     angleValue = analogRead(A0);
-    if (angleValue < 128) { // 45 deg beyond left
+    if (angleValue < 170) { // 30 deg beyond left
       mtrM->run(BACKWARD);
       rotation = 1;
     }
@@ -170,7 +170,7 @@ void scanRotor() {
       Serial.print(", ");
       Serial.println(angleValue);
       Serial.flush();
-      delay(4);
+      delay(2);
     }
   }
 }
