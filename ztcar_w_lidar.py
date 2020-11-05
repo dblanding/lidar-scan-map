@@ -14,7 +14,6 @@ import time
 
 style.use('fivethirtyeight')
 filename = "scandata"
-datafile = filename + ".csv"
 imagefile = filename + ".png"
     
 # detection level thesholds
@@ -73,6 +72,18 @@ def p2line_dist(pt, line):
     p0 = proj_pt_on_line(line, pt)
     return p2p_dist(pt, p0)
 
+
+class point():
+
+    def __init__(self, dist, enc_val, lev=0, theta=0, x=0, y=0):
+        self.dist = dist
+        self.enc_val = enc_val
+        sefl.lev = lev
+        self.theta = theta
+        self.x = x
+        self.y = y
+
+
 def read_data_line():
     if ser.in_waiting:
         try:
@@ -84,7 +95,8 @@ def read_data_line():
 
 
 def scan():
-    # collect incoming scan data
+    # collect incoming scan data, return list
+    datalen = 0
     data = []
     data_line = read_data_line()  # 'A' from previous command
     data_line = read_data_line()  # None
@@ -93,11 +105,10 @@ def scan():
         if data_line:
             if data_line != 'A':
                 data.append(data_line)
-
-    # save data to file
-    print("Lines of data = ", len(data))
-    with open(datafile, 'w') as f:
-        f.write("\n".join(data)) # TypeError: sequence item 0: expected str instance, NoneType found
+                if len(data) != datalen:
+                    print(data_line)
+                    datalen = len(data)
+    return data
 
 def find_corners(regions):
     """Within each continuous region, find index and value of data point
@@ -134,30 +145,28 @@ def find_corners(regions):
                     regions.insert(n+1, (corner_index+1, end))
     return found
 
-def find_segments(datafile):
+def find_segments():
     """
-    Read scan data from file in which each line of the file contains
-    2 tab separated values representing distance & encoder_count.
+    Read scan data (list) in which each line contains 3
+    comma separated values: direction, distance & encoder_count.
     Return regions, a list of pairs of index values representing
     the end points of straight line segments which fit the data.
     """
     global xs, ys, nr_of_rows, direction
-    print("File name: ", datafile)
     print("gap threshold = ", GAP)
     print("corner threshold = ", CORNER)
     distances = []  # List of distance values
     enc_cnts = []  # List of actual encoder count values
-    with open(datafile) as f:
-        for line in f.readlines():
-            str_dir, str_dist, str_enc_cnt = line.strip().split(', ')
-            # map only data from center 180 degrees of rotation
-            if 256 <= int(str_enc_cnt) <= 768:
-                distances.append(int(str_dist))
-                enc_cnts.append(int(str_enc_cnt))
-                if int(str_dir) > 0:
-                    direction = 'CW'
-                else:
-                    direction = 'CCW'
+    for line in scan():
+        str_dir, str_dist, str_enc_cnt = line.strip().split(', ')
+        # map only data from center 180 degrees of rotation
+        if 256 <= int(str_enc_cnt) <= 768:
+            distances.append(int(str_dist))
+            enc_cnts.append(int(str_enc_cnt))
+            if int(str_dir) > 0:
+                direction = 'CW'
+            else:
+                direction = 'CCW'
     nr_of_rows = len(distances)
     print("Number of data points = ", nr_of_rows)
 
@@ -254,12 +263,11 @@ if __name__ == "__main__":
     print(read_data_line())
     ser.write(startscan)
     print(read_data_line())
-    scan()  # Collect scan data and save to datafile
-    segments = find_segments(datafile)
+    segments = find_segments()
     
     # plot data points & line segments
     plt.scatter(xs, ys, color='#003F72')
-    title = "%s (%s pts), %s scan\n" % (datafile, nr_of_rows, direction)
+    title = "(%s pts) " % nr_of_rows
     title += "GAP: %s, CORNER: %s" % (GAP, CORNER)                                                           
     plt.title(title)
     for segment in segments:
