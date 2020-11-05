@@ -21,8 +21,7 @@ GAP = 10
 CORNER = 8
 
 # global values
-xs = []  # list of x values of data points
-ys = []  # list of y values of data points
+points = []  # list of point type items
 nr_of_rows = 0 # Number of rows of data
 direction = None  # +1 for 'CW'; -1 for 'CCW'
 
@@ -73,15 +72,14 @@ def p2line_dist(pt, line):
     return p2p_dist(pt, p0)
 
 
-class point():
+class Point():
 
-    def __init__(self, dist, enc_val, lev=0, theta=0, x=0, y=0):
+    def __init__(self, dist, enc_val, lev=0, theta=0, xy=(0, 0)):
         self.dist = dist
         self.enc_val = enc_val
-        sefl.lev = lev
+        self.lev = lev
         self.theta = theta
-        self.x = x
-        self.y = y
+        self.xy = xy
 
 
 def read_data_line():
@@ -95,7 +93,7 @@ def read_data_line():
 
 
 def scan():
-    # collect incoming scan data, return list
+    # collect incoming scan data, return list of string types
     datalen = 0
     data = []
     data_line = read_data_line()  # 'A' from previous command
@@ -121,11 +119,11 @@ def find_corners(regions):
         max_idx = 0
         idx1 = region[0]
         idx2 = region[-1]
-        p1 = (xs[idx1], ys[idx1])
-        p2 = (xs[idx2], ys[idx2])
+        p1 = (points[idx1].xy)
+        p2 = (points[idx2].xy)
         line = cnvrt_2pts_to_coef(p1, p2)
         for n in range(idx1, idx2):
-            pnt = (xs[n], ys[n])
+            pnt = (points[n].xy)
             dist = p2line_dist(pnt, line)
             if dist > max_dist:
                 max_dist = dist
@@ -149,61 +147,63 @@ def find_segments():
     """
     Read scan data (list) in which each line contains 3
     comma separated values: direction, distance & encoder_count.
-    Return regions, a list of pairs of index values representing
+    Populate global points (list of points) and return
+    regions, a list of pairs of index values representing
     the end points of straight line segments which fit the data.
     """
+    global points
     global xs, ys, nr_of_rows, direction
     print("gap threshold = ", GAP)
     print("corner threshold = ", CORNER)
-    distances = []  # List of distance values
-    enc_cnts = []  # List of actual encoder count values
     for line in scan():
         str_dir, str_dist, str_enc_cnt = line.strip().split(', ')
         # map only data from center 180 degrees of rotation
         if 256 <= int(str_enc_cnt) <= 768:
-            distances.append(int(str_dist))
-            enc_cnts.append(int(str_enc_cnt))
+            pnt = Point(int(str_dist), int(str_enc_cnt))
+            points.append(pnt)
             if int(str_dir) > 0:
                 direction = 'CW'
             else:
                 direction = 'CCW'
-    nr_of_rows = len(distances)
+    nr_of_rows = len(points)
     print("Number of data points = ", nr_of_rows)
 
     # linearize the encoder count values to remove jitter
-    ec_start = enc_cnts[0]
-    ec_end = enc_cnts[-1]
-    ec_incr = float(enc_cnts[-1]-enc_cnts[0]) / (nr_of_rows - 1)
-    lin_ec_vals = []  # List of linearized encoder count values
-    start_cnt = float(enc_cnts[0])
-    for n in range(nr_of_rows):
-        lin_ec_vals.append(start_cnt + n * ec_incr)
-    #print("Minimum encoder value = ", lin_ec_vals[0])
-    #print("Maximum encoder value = ", lin_ec_vals[-1])
+    # and use linearized values to calculate theta values
+    # (increasing from 0 @ enc=768 to pi @ enc=256)
+    ec_start = points[0].enc_val
+    ec_end = points[-1].enc_val
+    ec_incr = float(ec_end - ec_start) / (nr_of_rows - 1)
+    for n, pnt in enumerate(points):
+        lev = float(ec_start + (n * ec_incr))
+        pnt.lev = lev
+        theta = 1.5 * math.pi * (1 - (lev / 768))
+        pnt.theta = theta
 
-    # Calculate theta (increasing from 0 @ enc=768 to pi @ enc=256)
-    thetas = []  # list of theta values
-    for n in range(nr_of_rows):
-        enc_val = lin_ec_vals[n]
-        theta = 1.5 * math.pi * (1 - (enc_val / 768))
-        thetas.append(theta)
-    #print("Minimum theta value = ", thetas[0])
-    #print("Maximum theta value = ", thetas[-1])
+    # Remove points whose dist value == 1200 (max value)
+    cull_list = []
+    for n, pnt in enumerate(points):
+        if pnt.dist == 1200:
+            cull_list.append(n)
+    cull_list.reverse()
+    for n in cull_list:
+        _ = points.pop(n)
 
-    # convert polar (dist, theta) coords to rect (x, y) coords
-    for n in range(nr_of_rows):
-        x = distances[n] * math.cos(thetas[n])
-        y = distances[n] * math.sin(thetas[n])
-        xs.append(x)
-        ys.append(y)
+    # convert polar coords (dist, theta) to (x, y) coords
+    for p in points:
+        x = p.dist * math.cos(p.theta)
+        y = p.dist * math.sin(p.theta)
+        p.xy = (x, y)
 
     # Find continuous regions of closely spaced points (delta dist < GAP).
     # 'large' gaps (delta dist > GAP) represent edges of "continuous regions".
     # Record the index of the start & end points of these continuous regions.
     regions = []  # list of regions
     start_index = 0  # index of start of first region
-    for n in range(1, nr_of_rows):
-        gap = abs(distances[n] - distances[n-1])
+    gap = 0
+    for n, pnt in enumerate(points):
+        if n:  # skip first point because there is no 'previous'
+            gap = abs(pnt.dist - points[n-1].dist)
         if gap > GAP:
             if n > (start_index + 1):
                 regions.append((start_index, n-1))
@@ -266,6 +266,12 @@ if __name__ == "__main__":
     segments = find_segments()
     
     # plot data points & line segments
+    xs = []
+    ys = []
+    for pnt in points:
+        x, y = pnt.xy
+        xs.append(x)
+        ys.append(y)
     plt.scatter(xs, ys, color='#003F72')
     title = "(%s pts) " % nr_of_rows
     title += "GAP: %s, CORNER: %s" % (GAP, CORNER)                                                           
