@@ -1,8 +1,8 @@
 """Communicate with ZT car onboard arduino through serial port,
-able to send commands to specify wheel motor speed & initiate scan.
-Do a 180 deg scan, collect scan data points and save to file.
-Analyze data pts and find set of best fit lines.
-Plot points and lines. Show plot and save plot image.
+Send commands to specify wheel motor speed & initiate scan.
+Do a 180 deg scan and collect scan data points.
+Analyze scan data points and find set of best fit lines.
+Plot points and lines. Display and save plot image.
 """
 
 import math
@@ -10,20 +10,18 @@ import matplotlib.pyplot as plt
 from matplotlib import style
 import os
 import serial
-import time
 
 style.use('fivethirtyeight')
 filename = "scandata"
 imagefile = filename + ".png"
-    
+
 # detection level thesholds
 GAP = 10
 CORNER = 8
 
 # global values
 points = []  # list of point type items
-nr_of_rows = 0 # Number of rows of data
-direction = None  # +1 for 'CW'; -1 for 'CCW'
+nr_of_rows = 0  # Number of rows of scan data
 
 ports = ['/dev/ttyACM0', '/dev/ttyACM1']
 for port in ports:
@@ -73,13 +71,16 @@ def p2line_dist(pt, line):
 
 
 class Point():
+    """Convenience structure encapsulating data point measured values
+
+    (int type) and calculated values (float type)"""
 
     def __init__(self, dist, enc_val, lev=0, theta=0, xy=(0, 0)):
-        self.dist = dist
-        self.enc_val = enc_val
-        self.lev = lev
-        self.theta = theta
-        self.xy = xy
+        self.dist = dist  # integer measured distance (cm)
+        self.enc_val = enc_val  # integer angle encoder value
+        self.lev = lev  # float linearized encoder value
+        self.theta = theta  # (derived) float angle wrt car (radians)
+        self.xy = xy  # (x, y) coordinates
 
 
 def read_data_line():
@@ -87,13 +88,13 @@ def read_data_line():
         try:
             read_line = ser.read_until()   # byte type
             line = read_line.decode("utf-8").strip()
-        except UnicodeDecodeError:  
+        except UnicodeDecodeError:
             line = None
         return line
 
 
 def scan():
-    # collect incoming scan data, return list of string types
+    """collect incoming scan data, return list of string types"""
     datalen = 0
     data = []
     data_line = read_data_line()  # 'A' from previous command
@@ -111,7 +112,7 @@ def scan():
 def find_corners(regions):
     """Within each continuous region, find index and value of data point
     located farthest from the end_to_end line segment if value > CORNERS.
-    If index(es) found, split region(s) at index & return True."""
+    If index found, split region(s) at index & return True."""
     corners = []
     found = False
     for region in regions:
@@ -151,8 +152,7 @@ def find_segments():
     regions, a list of pairs of index values representing
     the end points of straight line segments which fit the data.
     """
-    global points
-    global xs, ys, nr_of_rows, direction
+    global points, nr_of_rows
     print("gap threshold = ", GAP)
     print("corner threshold = ", CORNER)
     for line in scan():
@@ -161,16 +161,16 @@ def find_segments():
         if 256 <= int(str_enc_cnt) <= 768:
             pnt = Point(int(str_dist), int(str_enc_cnt))
             points.append(pnt)
-            if int(str_dir) > 0:
-                direction = 'CW'
-            else:
-                direction = 'CCW'
     nr_of_rows = len(points)
     print("Number of data points = ", nr_of_rows)
 
-    # linearize the encoder count values to remove jitter
-    # and use linearized values to calculate theta values
-    # (increasing from 0 @ enc=768 to pi @ enc=256)
+    # Linearize the encoder count values to remove ADC jitter
+    # and use linearized values to calculate theta values.
+    # encoder count values go from 0/1023 (straight behind)
+    # and increase with CW rotation.
+    # straight left: enc_val = 256; theta = pi
+    # straight ahead: enc_val = 512; theta = pi/2
+    # straight right: enc_val = 768; theta = 0
     ec_start = points[0].enc_val
     ec_end = points[-1].enc_val
     ec_incr = float(ec_end - ec_start) / (nr_of_rows - 1)
@@ -218,7 +218,7 @@ def find_segments():
     to_discard.reverse()
     for n in to_discard:
         _ = regions.pop(n)
-            
+
     print("Continuous regions: ", regions)
 
     # If the points in a continuous region are substantially straight & linear,
@@ -239,32 +239,32 @@ def find_segments():
     return regions
 
 if __name__ == "__main__":
-    
-    motorsOff = '0, 0, 0\n'.encode('utf-8')
-    startscan = '0, 0, 2\n'.encode('utf-8')
-    ser.write(motorsOff)
+
+    motors_off = '0, 0, 0\n'.encode('utf-8')
+    start_scan = '0, 0, 2\n'.encode('utf-8')
+    ser.write(motors_off)
 
     # Start to accelerate wheel motors and back to zero
     m = 0
     up = True # Accelerating
-    while (m>=0):
-        if(ser.in_waiting):
+    while m >= 0:
+        if ser.in_waiting:
             #read_serial = ser.readline()
             print(m, read_data_line())
-            outString = "%i, %i, 0\n" % (m,m)
-            ser.write(outString.encode('utf-8'))
+            out_string = "%i, %i, 0\n" % (m, m)
+            ser.write(out_string.encode('utf-8'))
             if up:
-                m+=10
-                if (m>20):
+                m += 10
+                if m > 20:
                     up = False
             else:
-                m-=10
-    ser.write(motorsOff)
+                m -= 10
+    ser.write(motors_off)
     print(read_data_line())
-    ser.write(startscan)
+    ser.write(start_scan)
     print(read_data_line())
     segments = find_segments()
-    
+
     # plot data points & line segments
     xs = []
     ys = []
@@ -274,7 +274,7 @@ if __name__ == "__main__":
         ys.append(y)
     plt.scatter(xs, ys, color='#003F72')
     title = "(%s pts) " % nr_of_rows
-    title += "GAP: %s, CORNER: %s" % (GAP, CORNER)                                                           
+    title += "GAP: %s, CORNER: %s" % (GAP, CORNER)
     plt.title(title)
     for segment in segments:
         start, end = segment
