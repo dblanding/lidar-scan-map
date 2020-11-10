@@ -11,3 +11,5 @@ The python program
 * displays a plot of the points and the best fit lines.
 
 ![plot showing data points & best-fit lines](images/scandata.png)
+
+[Things To Do Next](docs/ToDo.md)

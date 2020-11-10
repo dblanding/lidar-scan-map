@@ -14,6 +14,13 @@
  * 
  * A shaft angle encoder measures scan angle (0-5V out <-> 0-360 deg)
  * connected to pin A0
+ * 
+ * everything worked OK with TFMini, but got errors with TFMini Plus:
+ * ERROR_SERIAL_BADCHECKSUM TF Mini error
+ * Found solution at: https://github.com/opensensinglab/tfmini/issues/9
+ * Made a couple of changes in TFMini.cpp on lines 140, 158, 159
+ * But problem still occurred (less frequently)
+ * Reverted changes to TFMini.cpp and resumed using TFMini (not the Plus)
 */
 
 #include <SoftwareSerial.h>
@@ -133,8 +140,8 @@ void homeRotor() {
     if (error > 255) {
       error = 255;
     }
-    if (error < 40) {
-      error = 40;
+    if (error < 60) {
+      error = 60;
     }
     mtrM->setSpeed(error);
   }

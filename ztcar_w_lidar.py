@@ -9,6 +9,7 @@ import math
 import matplotlib.pyplot as plt
 from matplotlib import style
 import os
+from pprint import pprint
 import serial
 
 style.use('fivethirtyeight')
@@ -255,7 +256,7 @@ if __name__ == "__main__":
             ser.write(out_string.encode('utf-8'))
             if up:
                 m += 10
-                if m > 20:
+                if m > 30:
                     up = False
             else:
                 m -= 10
@@ -276,11 +277,15 @@ if __name__ == "__main__":
     title = "(%s pts) " % nr_of_rows
     title += "GAP: %s, CORNER: %s" % (GAP, CORNER)
     plt.title(title)
+    line_coords = []
     for segment in segments:
         start, end = segment
+        line_coords.append
         x_vals = [xs[start], xs[end]]
         y_vals = [ys[start], ys[end]]
+        line_coords.append(((xs[start], ys[start]), (xs[end], ys[end])))
         plt.plot(x_vals, y_vals)
+    pprint(line_coords)
     plt.axis('equal')
     plt.savefig(imagefile)
     plt.show()
