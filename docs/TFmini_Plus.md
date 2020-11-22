@@ -1,8 +1,11 @@
-## TF Mini / Plus resources
+## TF Mini / TF Mini Plus resources
 
 [Benewake website](http://en.benewake.com/)
 
 ### TF Mini
+
+The TFmini is available in two different comm. configurations: I2C & Serial.
+The one I have is the Serial type and cannot work in I2C mode.
 
 [Instructables (Complete guide)](https://www.instructables.com/Benewake-LiDAR-TFmini-Complete-Guide/)
 
@@ -12,14 +15,16 @@
 
 ### TF Mini Plus
 
+The TFMini-Plus works optionally in either serial or I2C mode.
+
 [Benewake TFmini_Plus README](https://github.com/TFmini/TFmini-Plus/blob/master/README.md)
 
 [Arduino library for TFMini-Plus using I2C interface](https://github.com/budryerson/TFMini-Plus-I2C)
 
 [Medium article: Interfacing TFmini Plus LiDAR with Raspberry Pi](https://medium.com/@engribrahimqazi/interfacing-tfmini-plus-lidar-with-raspberry-pi-4b-6cd82fcca5f1)
 
-> This last article led me to discover that I have been using the TF Mini all wrong. I also learned that I may not need the Arduino at all, but I certainly don't need it between my Python program and the TFMini (or TFMini Plus).  
-Instead of using the Arduino to interface with the lidar and then sending the data to my python program over the serial bus, I should allow the Python program to interface directly with the TFmini Plus. I took the code in the article and modified it so it doesn't waste time printing, but just collects data as fast as it arrives on the serial port.
+> This last article led me to discover that the TF Mini can send its data directly to the RasPi Python program. No need for an Arduino.  
+Instead of using the Arduino to interface with the lidar and then send the data to my python program over the serial bus, I should allow the Python program to interface directly with the TFmini Plus. I took the code in the article and modified it so it doesn't waste time printing, but just collects data as fast as it arrives on the serial port.
 
 ```
 # -*- coding: utf-8 -*
