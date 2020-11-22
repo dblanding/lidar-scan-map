@@ -1,7 +1,7 @@
 ## Mapping LiDAR scan data
 This project uses an Arduino UNO to collect scan data from a Benewake TFMini LiDAR module mounted to scan 180 degrees on a vertical axis.
 
-![Zero Turn Car with rotating LiDAR](images/ztCarLidar.jpg)
+![Zero Turn Car with rotating LiDAR](images/I.jpg)
 
 The scan data are then transmitted via serial bus to a python program running on a Raspberry Pi 3B+.
 The python program
