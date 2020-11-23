@@ -13,6 +13,6 @@ The python program
 
 The Arduino controls the motors through an Adafruit motor shield
 
-![plot showing data points & best-fit lines](images/scandata.png)
+![plot showing data points & best-fit lines](images/scandata4.png)
 
 [Things To Do Next](docs/ToDo.md)
