@@ -11,7 +11,7 @@ The python program
 * Finds the best fit lines through the scan points
 * Displays a plot of the points and the best fit lines.
 
-The Arduimo controls the motors through an Adafruit motor shield
+The Arduino controls the motors through an Adafruit motor shield
 
 ![plot showing data points & best-fit lines](images/scandata.png)
 

@@ -1,4 +1,4 @@
-"""Read in scan data from file.
+"""
 Analyze scan data points and find set of best fit lines.
 Plot points and lines. Display and save plot image.
 """
@@ -11,7 +11,6 @@ from pprint import pprint
 
 style.use('fivethirtyeight')
 filename = "scandata"
-imagefile = filename + ".png"
 
 # detection level thesholds
 GAP = 10
@@ -74,12 +73,6 @@ class Point():
         self.xy = xy  # (x, y) coordinates
 
 
-def readScanData():
-    """Read scan data from file, return list of string types"""
-    with open('scan_data') as f:
-        data = f.readlines()
-    return data
-
 def find_corners(regions):
     """Within each continuous region, find index and value of data point
     located farthest from the end_to_end line segment if value > CORNERS.
@@ -115,7 +108,7 @@ def find_corners(regions):
                     regions.insert(n+1, (corner_index+1, end))
     return found
 
-def find_segments():
+def find_segments(data):
     """
     Read scan_data (list) in which each line contains 4 vlues:
     encoder_count, distance, byte_count, delta_time.
@@ -126,11 +119,12 @@ def find_segments():
     global points, nr_of_rows
     print("gap threshold = ", GAP)
     print("corner threshold = ", CORNER)
-    for line in readScanData():
-        str_enc_cnt, str_dist, *rest = line.strip().split()
+    for item in data:
+        enc_cnt = item[0]
+        dist = item[1]
         # map only data from center 180 degrees of rotation
-        if 10000 <= int(str_enc_cnt) <= 30000:
-            pnt = Point(int(str_dist), int(str_enc_cnt))
+        if 10000 <= enc_cnt <= 30000:
+            pnt = Point(dist, enc_cnt)
             points.append(pnt)
     nr_of_rows = len(points)
     print("Number of data points = ", nr_of_rows)
@@ -205,9 +199,14 @@ def find_segments():
         print("Regions: ", regions)
     return regions
 
-if __name__ == "__main__":
-
-    segments = find_segments()
+def show_map(data, nmbr=None):
+    global points
+    points = []
+    segments = find_segments(data)
+    if nmbr:
+        imagefile = filename + str(nmbr) + ".png"
+    else:
+        imagefile = filename + ".png"
 
     # plot data points & line segments
     xs = []
@@ -231,4 +230,5 @@ if __name__ == "__main__":
     pprint(line_coords)
     plt.axis('equal')
     plt.savefig(imagefile)
-    plt.show()
+    plt.clf()  # clears previous points & lines
+    #plt.show()  # shows interactive plot
