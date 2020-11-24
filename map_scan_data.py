@@ -10,15 +10,14 @@ import os
 from pprint import pprint
 
 style.use('fivethirtyeight')
-filename = "scandata"
+filename = "scanMaps/scanMap"
 
 # detection level thesholds
-GAP = 10
-CORNER = 8
+GAP = 6
+CORNER = 6
 
 # global values
 points = []  # list of point type items
-nr_of_rows = 0  # Number of rows of scan data
 
 # utility functions for working with 2D points and lines
 # a point (x, y) is represented by its x, y coordinates
@@ -95,8 +94,8 @@ def find_corners(regions):
                 max_idx = n
         if max_dist > CORNER:
             corners.append(max_idx)
-    # Insert found corners into regions. Start with high values of index first
-    # to avoid problems when popping and inserting into regions.
+    # Insert found corners into regions. Start with high values of index
+    # first to avoid problems when popping and inserting into regions.
     if corners:
         found = True
         corners.reverse()
@@ -108,57 +107,14 @@ def find_corners(regions):
                     regions.insert(n+1, (corner_index+1, end))
     return found
 
-def find_segments(data):
+def _find_continuous_regions():
+    """Find continuous regions of closely spaced points (clumps)
+    Large gaps (dist to neighbor > GAP) represent 'edges' of regions.
+    Record index of the start & end points of each region.
+    Return list of regions.
     """
-    Read scan_data (list) in which each line contains 4 vlues:
-    encoder_count, distance, byte_count, delta_time.
-    Populate global points (list of points) and return
-    regions, a list of pairs of index values representing
-    the end points of straight line segments which fit the data.
-    """
-    global points, nr_of_rows
-    print("gap threshold = ", GAP)
-    print("corner threshold = ", CORNER)
-    for item in data:
-        enc_cnt = item[0]
-        dist = item[1]
-        # map only data from center 180 degrees of rotation
-        if 10000 <= enc_cnt <= 30000:
-            pnt = Point(dist, enc_cnt)
-            points.append(pnt)
-    nr_of_rows = len(points)
-    print("Number of data points = ", nr_of_rows)
+    global points
 
-    # encoder count values go from 0 (straight behind)
-    # and increase with CW rotation.
-    # straight left: enc_val = 10000; theta = pi
-    # straight ahead: enc_val = 20000; theta = pi/2
-    # straight right: enc_val = 30000; theta = 0
-    ec_start = points[0].enc_val
-    ec_end = points[-1].enc_val
-    ec_incr = float(ec_end - ec_start) / (nr_of_rows - 1)
-    for pnt in points:
-        theta = 1.5 * math.pi * (1 - (pnt.enc_val / 30000))
-        pnt.theta = theta
-
-    # Remove points whose dist value == 1200 (max value)
-    cull_list = []
-    for n, pnt in enumerate(points):
-        if pnt.dist == 1200:
-            cull_list.append(n)
-    cull_list.reverse()
-    for n in cull_list:
-        _ = points.pop(n)
-
-    # convert polar coords (dist, theta) to (x, y) coords
-    for p in points:
-        x = p.dist * math.cos(p.theta)
-        y = p.dist * math.sin(p.theta)
-        p.xy = (x, y)
-
-    # Find continuous regions of closely spaced points (delta dist < GAP).
-    # 'large' gaps (delta dist > GAP) represent edges of "continuous regions".
-    # Record the index of the start & end points of these continuous regions.
     regions = []  # list of regions
     start_index = 0  # index of start of first region
     gap = 0
@@ -170,27 +126,116 @@ def find_segments(data):
                 regions.append((start_index, n-1))
             start_index = n
     regions.append((start_index, n))
+    return regions
 
-    # Discard regions having only 2 or 3 points
+
+def find_segments(data):
+    """
+    Read raw scan_data (list) in which each line contains 4 vlues:
+    encoder_count, distance, byte_count, delta_time.
+    Populate global points (list of points) and return
+    regions, a list of pairs of index values representing
+    the end points of straight line segments that fit the data.
+    """
+    global points
+    print("gap threshold = ", GAP)
+    print("corner threshold = ", CORNER)
+    for item in data:
+        enc_cnt = item[0]
+        dist = item[1]
+        # map only data from center 180 degrees of rotation
+        if 10000 <= enc_cnt <= 30000:
+            pnt = Point(dist, enc_cnt)
+            points.append(pnt)
+    print("Initial number of raw data points = ", len(points))
+
+    # encoder count values go from 0 (straight behind)
+    # and increase with CW rotation.
+    # straight left: enc_val = 10000; theta = pi
+    # straight ahead: enc_val = 20000; theta = pi/2
+    # straight right: enc_val = 30000; theta = 0
+    # (enc_val tops out at 32765, so no info past that)
+    ec_start = points[0].enc_val
+    ec_end = points[-1].enc_val
+    ec_incr = float(ec_end - ec_start) / (len(points) - 1)
+    for pnt in points:
+        theta = 1.5 * math.pi * (1 - (pnt.enc_val / 30000))
+        pnt.theta = theta
+
+    # Remove points whose dist value == 1200 (max value)
+    cull_list = []
+    for n, pnt in enumerate(points):
+        if pnt.dist == 1200:
+            cull_list.append(n)
+    print("Points culled with dist > 1200: ", len(cull_list))
+    cull_list.reverse()
+    for n in cull_list:
+        points.pop(n)
+
+    # Remove points whose dist value == 0
+    cull_list = []
+    for n, pnt in enumerate(points):
+        if pnt.dist == 0:
+            cull_list.append(n)
+    print("Points culled with dist == 0: ", len(cull_list))
+    cull_list.reverse()
+    for n in cull_list:
+        points.pop(n)
+
+    # convert polar coords (dist, theta) to (x, y) coords
+    for p in points:
+        x = p.dist * math.cos(p.theta)
+        y = p.dist * math.sin(p.theta)
+        p.xy = (x, y)
+
+    # Find continuous regions of closely spaced points (delta dist < GAP)
+    regions = _find_continuous_regions()
+
+    # Discard points in regions having fewer than 4 points
     to_discard = []
     for n, region in enumerate(regions):
         if region[-1] - region[0] < 4:
-            to_discard.append(n)
+            for idx in range(region[0]-1, region[-1]):
+                to_discard.append(idx)
+    print("Points discarded from tiny regions", len(to_discard))
     to_discard.reverse()
-    for n in to_discard:
-        _ = regions.pop(n)
+    for idx in to_discard:
+        points.pop(idx)
+
+    # Find continuous regions (again) with revised list of points
+    regions = _find_continuous_regions()
+
+    # find (and discard) 'solo' points between continuous regions
+    solo_points = []
+    top_of_prev_region = -1
+    for region in regions:
+        nbr = region[0] - top_of_prev_region - 1  # nmbr_of_solo_pts:
+        if nbr:
+            idx = top_of_prev_region
+            for n in range(nbr):
+                idx += 1
+                solo_points.append(idx)
+        top_of_prev_region = region[-1]
+    print("'solo' points (not in a region) discarded: ", len(solo_points))
+    solo_points.reverse()
+    for idx in solo_points:
+        points.pop(idx)
+
+    # Find continuous regions (again) with revised list of points
+    regions = _find_continuous_regions()
 
     print("Continuous regions: ", regions)
 
-    # If the points in a continuous region are substantially straight & linear,
-    # they can be well represented by a straight line segment between the start
-    # and end points of the region. However, if the points trace an 'L' shape,
-    # as they would where two walls meet at a corner, two straight line segments
-    # would be needed, with the two segments meeting at the corner.
-    # To find a corner in a region, look for the point at the greatest distance
-    # from the straight line joining the region end points.
-    # Only one corner is found at a time. To find multiple corners in a region
-    # (of a zig-zag shaped wall, for example) make multiple passes.
+    # If the points in a continuous region are substantially straight &
+    # linear, they can be well represented by a straight line segment
+    # between the start and end points of the region.
+    # However, if the points trace an 'L' shape, as they would where two
+    # walls meet at a corner, two straight line segments would be needed,
+    # with the two segments meeting at the corner.
+    # To find a corner in a region, look for the point at the greatest
+    # distance from the straight line joining the region end points.
+    # Only one corner is found at a time. To find multiple corners in a
+    # region (a zig-zag shaped wall, for example) make multiple passes.
 
     p = 0
     while find_corners(regions):
@@ -216,7 +261,7 @@ def show_map(data, nmbr=None):
         xs.append(x)
         ys.append(y)
     plt.scatter(xs, ys, color='#003F72')
-    title = "(%s pts) " % nr_of_rows
+    title = "(%s pts) " % len(points)
     title += "GAP: %s, CORNER: %s" % (GAP, CORNER)
     plt.title(title)
     line_coords = []

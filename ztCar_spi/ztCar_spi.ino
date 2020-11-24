@@ -130,10 +130,10 @@ void loop() {
   }
   if (mtr == 3) {
     if (rev) {
-      mtrM->run(FORWARD);
+      mtrM->run(BACKWARD);
     }
     else {
-      mtrM->run(BACKWARD);
+      mtrM->run(FORWARD);
     }
     mtrM->setSpeed(spd);
   }
