@@ -64,7 +64,7 @@ class ZTCar():
         last_time = time.time()
         data = []
         while enc_val < 32767:  # continue as values increase to max
-            enc_val = adc.read_adc(0, gain=GAIN)
+            enc_val = adc.read_adc(0, gain=GAIN, data_rate=250)
             if 10000 < enc_val < 30000:  # 20000 is 'straight ahead'
                 counter = self.read_dist()
                 now = time.time()
@@ -81,11 +81,11 @@ class ZTCar():
 
 
     def start_scan_mtr(self):
-        msg = [3, 255]
+        msg = [7, 255]  # Mtr 3 on shield 2
         result = spi.xfer(msg)
 
     def stop_scan_mtr(self):
-        msg = [3, 0]
+        msg = [7, 0]  # Mtr 3 on shield 2
         result = spi.xfer(msg)
 
     def close(self):
