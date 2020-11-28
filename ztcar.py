@@ -1,4 +1,4 @@
-"""This program accesses all the functions of the zero turn car.
+"""This program accesses all the functions of the omni wheel car.
 
   * Motor drive by command to the arduino (then through motor shield)
   * Access to TFminiPlus data
@@ -31,10 +31,25 @@ spi.max_speed_hz = 500000  # Set SPI speed and mode
 spi.mode = 0
 
 
-class ZTCar():
+class OmniCar():
     
     def __init__(self):
         self.distance = 0
+
+    def go_fwd(self, spd):
+        msg1 = [4, spd]
+        #msg4 = [4, spd]
+        #msg3 = [3, spd]
+        #msg2 = [2, spd]
+        result = spi.xfer(msg1)
+        time.sleep(.01)
+
+    def run_mtr(self, mtr, spd):
+        msg = [mtr, spd]
+        result = spi.xfer(msg)
+
+    def stop(self):
+        result = spi.xfer([4, 0])
 
     def read_dist(self):
         counter = ser.in_waiting # bytes available on serial port
