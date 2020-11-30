@@ -1,7 +1,7 @@
 """This program accesses all the functions of the omni wheel car.
 
   * Motor drive by command to the arduino (then through motor shield)
-  * Access to TFminiPlus data
+  * Access TFminiPlus data through serial bus
   * Access to rotary angle encoder (through ADC)
 
 The TFminiPlus uses the RasPi's only serial bus for data transfer.
@@ -37,19 +37,58 @@ class OmniCar():
         self.distance = 0
 
     def go_fwd(self, spd):
-        msg1 = [4, spd]
-        #msg4 = [4, spd]
-        #msg3 = [3, spd]
-        #msg2 = [2, spd]
-        result = spi.xfer(msg1)
-        time.sleep(.01)
+        """spd is an int between 0-255"""
+        msg4 = [4, spd]  # High byte, Low byte
+        msg3 = [3+8, spd]  # 4th bit in high byte -> reverse dir
+        msg1 = [1, spd]
+        msg2 = [2+8, spd]
+        for msg in (msg1, msg2, msg3, msg4):
+            _ = spi.xfer(msg)
+            time.sleep(.005)
 
-    def run_mtr(self, mtr, spd):
-        msg = [mtr, spd]
-        result = spi.xfer(msg)
+    def go_back(self, spd):
+        """spd is an int between 0-255"""
+        msg4 = [4+8, spd]
+        msg3 = [3, spd]
+        msg1 = [1+8, spd]
+        msg2 = [2, spd]
+        for msg in (msg1, msg2, msg3, msg4):
+            _ = spi.xfer(msg)
+            time.sleep(.005)
 
-    def stop(self):
-        result = spi.xfer([4, 0])
+    def go_left(self, spd):
+        """spd is an int between 0-255"""
+        msg4 = [4, spd]
+        msg3 = [3+8, spd]
+        msg1 = [1+8, spd]
+        msg2 = [2, spd]
+        for msg in (msg1, msg2, msg3, msg4):
+            _ = spi.xfer(msg)
+            time.sleep(.005)
+
+    def go_right(self, spd):
+        """spd is an int between 0-255"""
+        msg4 = [4+8, spd]
+        msg3 = [3, spd]
+        msg1 = [1+8, spd]
+        msg2 = [2, spd]
+        for msg in (msg1, msg2, msg3, msg4):
+            _ = spi.xfer(msg)
+            time.sleep(.005)
+
+    def run_mtr(self, mtr, spd, rev=False):
+        """mtr is an int between 1-5, spd is an int 0-255"""
+        if rev:
+            msg = [mtr+8, spd]
+        else:
+            msg = [mtr, spd]
+        _ = spi.xfer(msg)
+
+    def stop_wheels(self):
+        """stops all wheel motors (1,2,3,4)"""
+        for n in range(1, 5):
+            _ = spi.xfer([n, 0])
+            time.sleep(.005)
 
     def read_dist(self):
         counter = ser.in_waiting # bytes available on serial port
@@ -65,16 +104,16 @@ class OmniCar():
 
     def scan(self):
         """Return list tuples of scan data values."""
-        # Make sure scan rotor starts from near 'back dead cntr'
         enc_val = adc.read_adc(0, gain=GAIN, data_rate=250)
+        # If scan rotor isn't near BDC (back dead cntr), go to BDC
         if enc_val > 3000:
-            self.start_scan_mtr()
+            self.run_mtr(5, 255)  # start scan mtr
             while enc_val < 32767:  # continue as values increase to max
                 enc_val = adc.read_adc(0, gain=GAIN)
             while enc_val == 32767:  # continue to back dead cntr
                 enc_val = adc.read_adc(0, gain=GAIN)
         else:
-            self.start_scan_mtr()
+            self.run_mtr(5, 255)  # start scan mtr
             enc_val = adc.read_adc(0, gain=GAIN, data_rate=250)
         last_time = time.time()
         data = []
@@ -91,17 +130,9 @@ class OmniCar():
         while enc_val == 32767:  # continue to back dead cntr
             enc_val = adc.read_adc(0, gain=GAIN, data_rate=250)
 
-        self.stop_scan_mtr()
+        self.run_mtr(5, 0)  # stop scan mtr
         return data
 
-
-    def start_scan_mtr(self):
-        msg = [7, 255]  # Mtr 3 on shield 2
-        result = spi.xfer(msg)
-
-    def stop_scan_mtr(self):
-        msg = [7, 0]  # Mtr 3 on shield 2
-        result = spi.xfer(msg)
 
     def close(self):
         spi.close()

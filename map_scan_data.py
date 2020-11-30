@@ -125,7 +125,7 @@ def _find_continuous_regions():
             if n > (start_index + 1):
                 regions.append((start_index, n-1))
             start_index = n
-    regions.append((start_index, n))
+    regions.append((start_index, n))  # append final region in loop above
     return regions
 
 
@@ -155,9 +155,8 @@ def find_segments(data):
     # straight ahead: enc_val = 20000; theta = pi/2
     # straight right: enc_val = 30000; theta = 0
     # (enc_val tops out at 32765, so no info past that)
-    ec_start = points[0].enc_val
-    ec_end = points[-1].enc_val
-    ec_incr = float(ec_end - ec_start) / (len(points) - 1)
+    # ec_start = points[0].enc_val
+    # ec_end = points[-1].enc_val
     for pnt in points:
         theta = 1.5 * math.pi * (1 - (pnt.enc_val / 30000))
         pnt.theta = theta
@@ -183,10 +182,10 @@ def find_segments(data):
         points.pop(n)
 
     # convert polar coords (dist, theta) to (x, y) coords
-    for p in points:
-        x = p.dist * math.cos(p.theta)
-        y = p.dist * math.sin(p.theta)
-        p.xy = (x, y)
+    for pnt in points:
+        x = pnt.dist * math.cos(pnt.theta)
+        y = pnt.dist * math.sin(pnt.theta)
+        pnt.xy = (x, y)
 
     # Find continuous regions of closely spaced points (delta dist < GAP)
     regions = _find_continuous_regions()
@@ -237,10 +236,10 @@ def find_segments(data):
     # Only one corner is found at a time. To find multiple corners in a
     # region (a zig-zag shaped wall, for example) make multiple passes.
 
-    p = 0
+    pass_nr = 0
     while find_corners(regions):
-        p += 1
-        print("Look for corners, pass %s:" % p)
+        pass_nr += 1
+        print("Look for corners, pass %s:" % pass_nr)
         print("Regions: ", regions)
     return regions
 
@@ -264,10 +263,9 @@ def show_map(data, nmbr=None):
     title = "(%s pts) " % len(points)
     title += "GAP: %s, CORNER: %s" % (GAP, CORNER)
     plt.title(title)
-    line_coords = []
+    line_coords = []  # x, y coordinates
     for segment in segments:
         start, end = segment
-        line_coords.append
         x_vals = [xs[start], xs[end]]
         y_vals = [ys[start], ys[end]]
         line_coords.append(((xs[start], ys[start]), (xs[end], ys[end])))

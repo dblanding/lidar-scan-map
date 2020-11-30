@@ -1,13 +1,13 @@
 import map_scan_data
-import ztcar
+import omnicar
 import time
 import pickle
 
-zt = ztcar.ZTCar()
+car = omnicar.OmniCar()
 data_list = []
 # Collect 4 scans
 for n in range(4):
-    scan_data = zt.scan()
+    scan_data = car.scan()
     print(scan_data[0])
     print("Number of data points: ", len(scan_data))
     scan_data.pop(0)
