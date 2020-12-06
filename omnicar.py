@@ -133,6 +133,7 @@ device = 0  # Device is the chip select pin. Set to 0 or 1
 spi.open(bus, device)  # Open a connection
 spi.max_speed_hz = 500000  # Set SPI speed and mode
 spi.mode = 0
+spi_wait = .005  # wait time (sec) between successive spi commands
 
 
 class OmniCar():
@@ -148,7 +149,7 @@ class OmniCar():
         msg2 = [2+8, spd]
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
-            time.sleep(.005)
+            time.sleep(spi_wait)
 
     def go_back(self, spd):
         """spd is an int between 0-255"""
@@ -158,7 +159,7 @@ class OmniCar():
         msg2 = [2, spd]
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
-            time.sleep(.005)
+            time.sleep(spi_wait)
 
     def go_left(self, spd):
         """spd is an int between 0-255"""
@@ -168,7 +169,7 @@ class OmniCar():
         msg2 = [2, spd]
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
-            time.sleep(.005)
+            time.sleep(spi_wait)
 
     def go_right(self, spd):
         """spd is an int between 0-255"""
@@ -178,7 +179,19 @@ class OmniCar():
         msg2 = [2+8, spd]
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
-            time.sleep(.005)
+            time.sleep(spi_wait)
+
+    def spin_ccw(self, spd):
+        """spd is an int between 0-255"""
+        for n in range(1, 5):
+            _ = spi.xfer([n, spd])
+            time.sleep(spi_wait)
+
+    def spin_cw(self, spd):
+        """spd is an int between 0-255"""
+        for n in range(1, 5):
+            _ = spi.xfer([n+8, spd])
+            time.sleep(spi_wait)
 
     def run_mtr(self, mtr, spd, rev=False):
         """mtr is an int between 1-5, spd is an int 0-255"""
@@ -192,7 +205,7 @@ class OmniCar():
         """stops all wheel motors (1,2,3,4)"""
         for n in range(1, 5):
             _ = spi.xfer([n, 0])
-            time.sleep(.005)
+            time.sleep(spi_wait)
 
     def read_dist(self):
         counter = ser.in_waiting # bytes available on serial port
@@ -242,7 +255,6 @@ class OmniCar():
 
         self.scan_mtr_stop()
         return data
-
 
     def close(self):
         spi.close()
