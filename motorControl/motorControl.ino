@@ -14,18 +14,18 @@
 
 #define UL unsigned long
 #define US unsigned short
-
-Adafruit_MotorShield AFMS1 = Adafruit_MotorShield(0x60); 
+// wheel motors
+Adafruit_MotorShield AFMS1 = Adafruit_MotorShield(0x61); 
 Adafruit_DCMotor *mtr1 = AFMS1.getMotor(1); // mtr1 is a pointer
 Adafruit_DCMotor *mtr2 = AFMS1.getMotor(2);
 Adafruit_DCMotor *mtr3 = AFMS1.getMotor(3);
 Adafruit_DCMotor *mtr4 = AFMS1.getMotor(4);
-
-Adafruit_MotorShield AFMS2 = Adafruit_MotorShield(0x61); 
-Adafruit_DCMotor *mtr5 = AFMS2.getMotor(1); // mtr5 is a pointer
-Adafruit_DCMotor *mtr6 = AFMS2.getMotor(2);
-Adafruit_DCMotor *mtr7 = AFMS2.getMotor(3);
-Adafruit_DCMotor *mtr8 = AFMS2.getMotor(4);
+// 4 more motors
+Adafruit_MotorShield AFMS0 = Adafruit_MotorShield(0x60); 
+Adafruit_DCMotor *mtr5 = AFMS0.getMotor(1); // mtr5 is a pointer
+Adafruit_DCMotor *mtr6 = AFMS0.getMotor(2);
+Adafruit_DCMotor *mtr7 = AFMS0.getMotor(3);
+Adafruit_DCMotor *mtr8 = AFMS0.getMotor(4);
 
 int mtr = 0;
 int spd = 0;
@@ -35,7 +35,7 @@ void SlaveInit(void) {
   // Set MISO output, all others input
   pinMode(SCK_PIN, INPUT);
   pinMode(MOSI_PIN, INPUT);
-  pinMode(MISO_PIN, OUTPUT);  // (only if bidirectional mode needed)
+  //pinMode(MISO_PIN, OUTPUT);  // (only if bidirectional mode needed)
   pinMode(SS_PIN, INPUT);
 
   /*  Setup SPI control register SPCR
@@ -79,8 +79,8 @@ void setup()
   }
   Serial.println("Hello from Arduino motorControl");
   SlaveInit();  // set up SPI slave mode
+  AFMS0.begin();
   AFMS1.begin();
-  AFMS2.begin();
   mtr1->setSpeed(0); // use '->' (not '.') because mtr1 is a pointer
   mtr2->setSpeed(0);
   mtr3->setSpeed(0);
@@ -116,85 +116,87 @@ void loop() {
   //    Serial.print(",");
   uint8_t low = word1 & 0xff;
   uint8_t high = (word1 >> 8);
-  mtr = (high & 0x07); // lowest 3 bits of upper byte
+  Serial.println();
+  Serial.print("high Byte: ");
+  Serial.println(high);
+  Serial.print("low Byte: ");
+  Serial.println(low);
+  mtr = (high & 0x7); // lowest 3 bits of upper byte
   rev = (high & 0x8);  // 4th bit of upper byte (1 = reverse)
   spd = low; // motor speed (0-255)
   Serial.print("mtr: ");
   Serial.print(mtr);
   Serial.print("; speed: ");
   Serial.print(spd);
-  Serial.print("; reverse ?: ");
+  Serial.print("; reverse?: ");
   Serial.println(rev);
-  if (mtr == 1) {
-    if (rev) {
-      mtr1->run(BACKWARD);
-    }
-    else {
-      mtr1->run(FORWARD);
-    }
-    mtr1->setSpeed(spd);
-  }
-  if (mtr == 2) {
-    if (rev) {
-      mtr2->run(BACKWARD);
-    }
-    else {
-      mtr2->run(FORWARD);
-    }
-    mtr2->setSpeed(spd);
-  }
-  if (mtr == 3) {
-    if (rev) {
-      mtr3->run(BACKWARD);
-    }
-    else {
-      mtr3->run(FORWARD);
-    }
-    mtr3->setSpeed(spd);
-  }
-  if (mtr == 4) {
-    if (rev) {
-      mtr4->run(BACKWARD);
-    }
-    else {
-      mtr4->run(FORWARD);
-    }
-    mtr4->setSpeed(spd);
-  }
-  if (mtr == 5) {
-    if (rev) {
-      mtr5->run(BACKWARD);
-    }
-    else {
-      mtr5->run(FORWARD);
-    }
-    mtr5->setSpeed(spd);
-  }
-  if (mtr == 6) {
-    if (rev) {
-      mtr6->run(BACKWARD);
-    }
-    else {
-      mtr6->run(FORWARD);
-    }
-    mtr6->setSpeed(spd);
-  }
-  if (mtr == 7) {
-    if (rev) {
-      mtr7->run(BACKWARD);
-    }
-    else {
-      mtr7->run(FORWARD);
-    }
-    mtr7->setSpeed(spd);
-  }
-  if (mtr == 8) {
-    if (rev) {
-      mtr8->run(BACKWARD);
-    }
-    else {
-      mtr8->run(FORWARD);
-    }
-    mtr8->setSpeed(spd);
+  switch (mtr) {
+    case 1:
+      if (rev) {
+        mtr1->run(BACKWARD);
+      } else {
+        mtr1->run(FORWARD);
+      }
+      mtr1->setSpeed(spd);
+      break;
+    case 2:
+      if (rev) {
+        mtr2->run(BACKWARD);
+      } else {
+        mtr2->run(FORWARD);
+      }
+      mtr2->setSpeed(spd);
+      break;
+    case 3:
+      if (rev) {
+        mtr3->run(BACKWARD);
+      } else {
+        mtr3->run(FORWARD);
+      }
+      mtr3->setSpeed(spd);
+      break;
+    case 4:
+      if (rev) {
+        mtr4->run(BACKWARD);
+      } else {
+        mtr4->run(FORWARD);
+      }
+      mtr4->setSpeed(spd);
+      break;
+    case 5:
+      if (rev) {
+        mtr5->run(BACKWARD);
+      } else {
+        mtr5->run(FORWARD);
+      }
+      mtr5->setSpeed(spd);
+      break;
+    case 6:
+      if (rev) {
+        mtr6->run(BACKWARD);
+      } else {
+        mtr6->run(FORWARD);
+      }
+      mtr6->setSpeed(spd);
+      break;
+    case 7:
+      if (rev) {
+        mtr7->run(BACKWARD);
+      } else {
+        mtr7->run(FORWARD);
+      }
+      mtr7->setSpeed(spd);
+      break;
+    case 0:
+      if (rev) {
+        mtr8->run(BACKWARD);
+      } else {
+        mtr8->run(FORWARD);
+      }
+      mtr8->setSpeed(spd);
+      break;
+    default:
+      Serial.println("Something went wrong");
+      break;
   }
 }
