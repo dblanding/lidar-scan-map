@@ -1,7 +1,11 @@
 ## Mapping LiDAR scan data
 This project uses a Benewake TFMini Plus LiDAR module mounted to scan 180 degrees on a vertical axis. A hall effect angle encoder reports the angular position of the scan rotor.
 
+### Rotating LiDAR mounted on a Zero Turn type car:
 ![Zero Turn Car with rotating LiDAR](images/IMG-2104.jpg)
+
+### Rotating LiDAR mounted on an Omni-Wheel type car:
+![Omni Wheel Car with rotating LiDAR](images/omnicar.jpg)
 
 The scan data are collected by a python program running on a Raspberry Pi 3B+.
 The python program
