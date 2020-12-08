@@ -14,56 +14,56 @@ are sent from the Raspberry Pi to the Arduino on the SPI bus, with
 the Raspberry Pi configured as SPI master, and the Arduino as slave.
 
 Wheel motors:
- If the car were to be driven to the right (in the X direction)
- as shown in the diagram below:
- 
-            ^
-            | Y direction
-          __|__
-         |_____|
-         /  |  \
-       /    M3   \
-   _ /             \ _
-  | |               | |
-  | |--M1  CAR  M2--| |---> X direction
-  |_|               |_|
-     \             /
-       \    M4   /
-         \__|__/
-         |_____|
-         
- Motor M4 would turn CW and motor M3 CCW at the same speed.
- Motors M1 & M2 would be off.
+If the car were to be driven to the right (in the X direction)
+as shown in the diagram below:
 
- To drive the car sideways (up on the diagram) we would
- drive motor M1 CCW and motor M2 CW at the same speed.
- Motors M3 & M4 would be off.
-  
- To get the car to spin CCW on its own axis, all 4
- motors would need to run CW at the same speed.
+           ^
+           | Y direction
+         __|__
+        |_____|
+        /  |  \
+      /    M3   \
+  _ /             \ _
+ | |               | |
+ | |--M1  CAR  M2--| |---> X direction
+ |_|               |_|
+    \             /
+      \    M4   /
+        \__|__/
+        |_____|
 
- The cool thing about an omni-wheel car is that all three
- of these motions can be superimposed:
-   - forward-back motion (X)
-   - sideways motion (Y)
-   - spin motion (θz).
+Motor M4 would turn CW and motor M3 CCW at the same speed.
+Motors M1 & M2 would be off.
 
- Each of these 3 independent motions can be controlled
- with an independent signal sx, sy, & sz.
+To drive the car sideways (up on the diagram) we would
+drive motor M1 CCW and motor M2 CW at the same speed.
+Motors M3 & M4 would be off.
 
- Ignoring spinning motion (θz), the signals sx & sy
- can be combined vectorally to produce motion in any
- oblique direction.
- 
- To drive the car at any oblique angle φ:
- 1. convert rect coords (sx, sy) to polar coords (sr, st)
- 2. add φ to angle st
- 3. convert back to rect coords
+To get the car to spin CCW on its own axis, all 4
+motors would need to run CW at the same speed.
+
+The cool thing about an omni-wheel car is that all three
+of these motions can be superimposed:
+    - forward-back motion (X)
+    - sideways motion (Y)
+    - spin motion (θz).
+
+Each of these 3 independent motions can be controlled
+with an independent signal sx, sy, & sz.
+
+Ignoring spinning motion (θz), the signals sx & sy
+can be combined vectorally to produce motion in any
+oblique direction.
+
+To drive the car at any oblique angle φ:
+1. convert rect coords (sx, sy) to polar coords (sr, st)
+2. add φ to angle st
+3. convert back to rect coords
 
 def r2p(x, y):
     r = math.sqrt(x*x + y*y)
     t = atan(y/x)
-    # arctan is tricky... add pi for quadrants 2 & 3 
+    # arctan is tricky... add pi for quadrants 2 & 3
     if (x<0):
         t += math.pi
     return (r, t)
@@ -73,25 +73,25 @@ def p2r(r, t):
     y = r * math.sin(t)
     return (x, y)
 
- To drive the car at 45 degrees, as shown in the diagram below,
- it's even simpler: Just combine the X & Y motions
+To drive the car at 45 degrees, as shown in the diagram below,
+it's even simpler: Just combine the X & Y motions
 
-            ^
-            | Y dir
-          __|__
-         |_____|
-         /  |  \
-       /    M3   \
-   _ /             \ _
-  | |               | |
-  | |--M1  CAR  M2--| |---> X dir
-  |_|               |_|
-     \             /
-       \    M4   / \
-         \__|__/    \
-         |_____|    _\|
+           ^
+           | Y dir
+         __|__
+        |_____|
+        /  |  \
+      /    M3   \
+  _ /             \ _
+ | |               | |
+ | |--M1  CAR  M2--| |---> X dir
+ |_|               |_|
+    \             /
+      \    M4   / \
+        \__|__/    \
+        |_____|    _\|
                     fwd dir
-                    
+
 go_fwd(spd):
     m4 = spd
     m3 = -spd
@@ -137,12 +137,16 @@ spi_wait = .005  # wait time (sec) between successive spi commands
 
 
 class OmniCar():
-    
+
     def __init__(self):
-        self.distance = 0
+        """
+        class OmniCar
+        Access functions of omni-wheel car.
+        Holds distance (cm) last measured by LiDAR module
+        """
 
     def go_fwd(self, spd):
-        """spd is an int between 0-255"""
+        """Drive car forward at speed = spd i(int between 0-255)."""
         msg4 = [4, spd]  # High byte, Low byte
         msg3 = [3+8, spd]  # 4th bit in high byte -> reverse dir
         msg1 = [1, spd]
@@ -152,7 +156,7 @@ class OmniCar():
             time.sleep(spi_wait)
 
     def go_back(self, spd):
-        """spd is an int between 0-255"""
+        """Drive car backward at speed = spd (int between 0-255)."""
         msg4 = [4+8, spd]
         msg3 = [3, spd]
         msg1 = [1+8, spd]
@@ -162,7 +166,7 @@ class OmniCar():
             time.sleep(spi_wait)
 
     def go_left(self, spd):
-        """spd is an int between 0-255"""
+        """Drive car left at speed = spd (int between 0-255)."""
         msg4 = [4, spd]
         msg3 = [3+8, spd]
         msg1 = [1+8, spd]
@@ -172,7 +176,7 @@ class OmniCar():
             time.sleep(spi_wait)
 
     def go_right(self, spd):
-        """spd is an int between 0-255"""
+        """Drive car right at speed = spd (int between 0-255)."""
         msg4 = [4+8, spd]
         msg3 = [3, spd]
         msg1 = [1, spd]
@@ -182,19 +186,22 @@ class OmniCar():
             time.sleep(spi_wait)
 
     def spin_ccw(self, spd):
-        """spd is an int between 0-255"""
+        """Spin car CCW at speed = spd i(int between 0-255)."""
         for n in range(1, 5):
             _ = spi.xfer([n, spd])
             time.sleep(spi_wait)
 
     def spin_cw(self, spd):
-        """spd is an int between 0-255"""
+        """Spin car CW at speed = spd (int between 0-255)."""
         for n in range(1, 5):
             _ = spi.xfer([n+8, spd])
             time.sleep(spi_wait)
 
     def run_mtr(self, mtr, spd, rev=False):
-        """mtr is an int between 1-5, spd is an int 0-255"""
+        """
+        Drive motor = mtr (int 0-7) at speed = spd (int 0-255)
+        in reverse direction if rev=True.
+        """
         if rev:
             msg = [mtr+8, spd]
         else:
@@ -202,12 +209,16 @@ class OmniCar():
         _ = spi.xfer(msg)
 
     def stop_wheels(self):
-        """stops all wheel motors (1,2,3,4)"""
+        """Stop all wheel motors (mtr numbers: 1 thrugh 4)."""
         for n in range(1, 5):
             _ = spi.xfer([n, 0])
             time.sleep(spi_wait)
 
     def read_dist(self):
+        """
+        Set self.distance = distance (cm) read from LiDAR module.
+        Return number of bytes that were waiting on serial port.
+        """
         counter = ser.in_waiting # bytes available on serial port
         if counter > 8:
             bytes_serial = ser.read(9)
@@ -220,13 +231,16 @@ class OmniCar():
         return counter
 
     def scan_mtr_start(self):
-        self.run_mtr(7, 255)  # start scan mtr
-        
+        """Turn scan motor on at full speed."""
+        self.run_mtr(7, 255)
+
     def scan_mtr_stop(self):
-        self.run_mtr(7, 0)  # stop scan mtr
+        """Turn scan motor off."""
+        self.run_mtr(7, 0)
 
     def scan(self):
-        """Return list tuples of scan data values."""
+        """Return list of tuples of scan data values.
+        """
         enc_val = adc.read_adc(0, gain=GAIN, data_rate=250)
         # If scan rotor isn't near BDC (back dead cntr), go to BDC
         if enc_val > 3000:
