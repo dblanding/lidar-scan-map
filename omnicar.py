@@ -133,7 +133,7 @@ device = 0  # Device is the chip select pin. Set to 0 or 1
 spi.open(bus, device)  # Open a connection
 spi.max_speed_hz = 500000  # Set SPI speed and mode
 spi.mode = 0
-spi_wait = .005  # wait time (sec) between successive spi commands
+spi_wait = .006  # wait time (sec) between successive spi commands
 
 
 class OmniCar():
@@ -230,9 +230,11 @@ class OmniCar():
             ser.flushInput()  # Keep the buffer empty (purge stale data)
         return counter
 
-    def scan_mtr_start(self):
-        """Turn scan motor on at full speed."""
-        self.run_mtr(7, 255)
+    def scan_mtr_start(self, spd=None):
+        """Turn scan motor on at speed = spd (int between 0-255)."""
+        if not spd:
+            spd = 200  # default value
+        self.run_mtr(7, spd)
 
     def scan_mtr_stop(self):
         """Turn scan motor off."""
@@ -263,10 +265,6 @@ class OmniCar():
                 last_time = now
                 data_item = (enc_val, self.distance, counter, delta_t)
                 data.append(data_item)
-
-        while enc_val == 32767:  # continue to back dead cntr
-            enc_val = adc.read_adc(0, gain=GAIN, data_rate=250)
-
         self.scan_mtr_stop()
         return data
 
