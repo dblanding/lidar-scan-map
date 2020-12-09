@@ -1,5 +1,5 @@
 """
-Collect several sequential scans as car advances.
+Collect several sequential scans as car advances (stop / start).
 """
 
 import map_scan_data
@@ -10,6 +10,38 @@ import pickle
 car = omnicar.OmniCar()
 data_list = []
 pause = 0.05  # sec pause time needed for wheel motor commands
+
+def obliq1(spd, t):
+    """Jog oblique quadrant 1 at spd (int 0-255) for t seconds
+    """
+    car.go_oblique1(spd)
+    time.sleep(t)
+    car.stop_wheels()
+    time.sleep(pause)
+
+def obliq2(spd, t):
+    """Jog oblique quadrant 2 at spd (int 0-255) for t seconds
+    """
+    car.go_oblique2(spd)
+    time.sleep(t)
+    car.stop_wheels()
+    time.sleep(pause)
+
+def obliq3(spd, t):
+    """Jog oblique quadrant 3 at spd (int 0-255) for t seconds
+    """
+    car.go_oblique3(spd)
+    time.sleep(t)
+    car.stop_wheels()
+    time.sleep(pause)
+
+def obliq4(spd, t):
+    """Jog oblique quadrant 4 at spd (int 0-255) for t seconds
+    """
+    car.go_oblique4(spd)
+    time.sleep(t)
+    car.stop_wheels()
+    time.sleep(pause)
 
 def fwd(spd, t):
     """Drive car forward at spd (int between 100-255) for t seconds
@@ -43,7 +75,23 @@ def right(spd, t):
     car.stop_wheels()
     time.sleep(pause)
 
-n = 3  # number of scans to collect
+def cw(spd, t):
+    """Spin car CW at spd (int between 100-255) for t seconds
+    """
+    car.spin_cw(spd)
+    time.sleep(t)
+    car.stop_wheels()
+    time.sleep(pause)
+
+def ccw(spd, t):
+    """Spin car CCW at spd (int between 100-255) for t seconds
+    """
+    car.spin_ccw(spd)
+    time.sleep(t)
+    car.stop_wheels()
+    time.sleep(pause)
+
+n = 6  # number of scans to collect
 while n:
     scan_data = car.scan()
     print(scan_data[0])
@@ -55,7 +103,8 @@ while n:
     n -= 1
     if n:
         time.sleep(pause)
-        fwd(100, 0.5)
+        #ccw(100, 0.85)  # roughly 45 degrees
+        right(100, .5)
 
 # scan data can be reloaded by operate_map.py, if needed.
 with open('scan_data.pkl', 'wb') as f:
@@ -63,4 +112,6 @@ with open('scan_data.pkl', 'wb') as f:
 
 # map the scans
 for n, scan_data in enumerate(data_list):
+    print()
+    print(f"Scan number {n+1} of {len(data_list)}")
     map_scan_data.show_map(scan_data, n+1)

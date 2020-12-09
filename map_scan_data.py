@@ -13,7 +13,7 @@ style.use('fivethirtyeight')
 filename = "scanMaps/scanMap"
 
 # detection level thesholds
-GAP = 6
+GAP = 10
 CORNER = 6
 
 # global values
@@ -120,12 +120,13 @@ def _find_continuous_regions():
     gap = 0
     for n, pnt in enumerate(points):
         if n:  # skip first point because there is no 'previous'
-            gap = abs(pnt.dist - points[n-1].dist)
+            gap = p2p_dist(pnt.xy, points[n-1].xy)
         if gap > GAP:
             if n > (start_index + 1):
                 regions.append((start_index, n-1))
             start_index = n
-    regions.append((start_index, n))  # append final region in loop above
+    if n != start_index:
+        regions.append((start_index, n))  # append final region in loop above
     return regions
 
 
@@ -190,38 +191,19 @@ def find_segments(data):
     # Find continuous regions of closely spaced points (delta dist < GAP)
     regions = _find_continuous_regions()
 
-    # Discard points in regions having fewer than 4 points
-    to_discard = []
-    for n, region in enumerate(regions):
-        if region[-1] - region[0] < 4:
-            for idx in range(region[0]-1, region[-1]):
-                to_discard.append(idx)
-    print("Points discarded from tiny regions", len(to_discard))
-    to_discard.reverse()
-    for idx in to_discard:
-        points.pop(idx)
-
-    # Find continuous regions (again) with revised list of points
-    regions = _find_continuous_regions()
-
-    # find (and discard) 'solo' points between continuous regions
-    solo_points = []
-    top_of_prev_region = -1
+    # Remove regions having fewer than 4 points
+    to_remove = []
     for region in regions:
-        nbr = region[0] - top_of_prev_region - 1  # nmbr_of_solo_pts:
-        if nbr:
-            idx = top_of_prev_region
-            for n in range(nbr):
-                idx += 1
-                solo_points.append(idx)
-        top_of_prev_region = region[-1]
-    print("'solo' points (not in a region) discarded: ", len(solo_points))
-    solo_points.reverse()
-    for idx in solo_points:
-        points.pop(idx)
+        if (region[-1] - region[0]) < 4:
+            to_remove.append(region)
+    print("number of tiny regions", len(to_remove))
+    for region in to_remove:
+        regions.remove(region)
 
-    # Find continuous regions (again) with revised list of points
-    regions = _find_continuous_regions()
+    # Find and remove regions with only 1 point
+    for region in regions:
+        if region[0] == region[-1]:
+            regions.remove(region)
 
     print("Continuous regions: ", regions)
 
@@ -243,19 +225,55 @@ def find_segments(data):
         print("Regions: ", regions)
     return regions
 
-def show_map(data, nmbr=None):
+def indexes_in_regions(regions):
+    """Return list of indexes contained in regions.
+    """
+    indexes = []
+    for region in regions:
+        indexes.extend([idx for idx in range(region[0], region[-1]+1)])
+    return indexes
+
+def analyze_data(data):
+    """
+    Examine the first segment (line defined by the first region)
+    This is the line directly to the left of the car.
+    Return information about this line to aid navigation.
+    Step 1: Square up to the line (wall).
+    Step 2: Drive parallel to the wall until it runs out.
+    """
+    # Start with a "clean slate"
     global points
     points = []
+    
+    # This next line populates points
+    regions = find_segments(data)
+
+    start_coords = points[regions[0][0]].xy
+    end_coords = points[regions[0][1]].xy
+    left_wall_length = p2p_dist(start_coords, end_coords)
+    left_wall_angle = p2p_angle(start_coords, end_coords)
+    left_wall_x_value = (start_coords[0] + end_coords[0]) / 2
+
+    return left_wall_length, left_wall_angle, left_wall_x_value
+
+def show_map(data, nmbr=None):
+    # We need to start with a "clean slate"
+    global points
+    points = []
+    
+    # This next line populates points
     segments = find_segments(data)
     if nmbr:
         imagefile = filename + str(nmbr) + ".png"
     else:
         imagefile = filename + ".png"
 
-    # plot data points & line segments
+    # plot data points
     xs = []
     ys = []
-    for pnt in points:
+    pnts_to_plot = [pnt for idx, pnt in enumerate(points)
+                       if idx in indexes_in_regions(segments)]
+    for pnt in pnts_to_plot:
         x, y = pnt.xy
         xs.append(x)
         ys.append(y)
@@ -263,14 +281,19 @@ def show_map(data, nmbr=None):
     title = "(%s pts) " % len(points)
     title += "GAP: %s, CORNER: %s" % (GAP, CORNER)
     plt.title(title)
+
+    # plot line segments
     line_coords = []  # x, y coordinates
     for segment in segments:
-        start, end = segment
-        x_vals = [xs[start], xs[end]]
-        y_vals = [ys[start], ys[end]]
-        line_coords.append(((xs[start], ys[start]), (xs[end], ys[end])))
+        idx1, idx2 = segment
+        pnt1 = points[idx1].xy
+        pnt2 = points[idx2].xy
+        x_vals = [pnt1[0], pnt2[0]]
+        y_vals = [pnt1[1], pnt2[1]]
+        line_coords.append((pnt1, pnt2))
         plt.plot(x_vals, y_vals)
     pprint(line_coords)
+    
     plt.axis('equal')
     plt.savefig(imagefile)
     plt.clf()  # clears previous points & lines

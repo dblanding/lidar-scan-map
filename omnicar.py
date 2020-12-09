@@ -144,9 +144,42 @@ class OmniCar():
         Access functions of omni-wheel car.
         Holds distance (cm) last measured by LiDAR module
         """
+        self.distance = 0
+
+    def go_oblique1(self, spd):
+        """Drive obliquely (quadrant 1) at spd (int between 0-255)."""
+        msg1 = [1, spd]
+        msg2 = [2+8, spd]
+        for msg in (msg1, msg2):
+            _ = spi.xfer(msg)
+            time.sleep(spi_wait)
+
+    def go_oblique2(self, spd):
+        """Drive obliquely (quadrant 2) at spd (int between 0-255)."""
+        msg1 = [4, spd]
+        msg2 = [3+8, spd]
+        for msg in (msg1, msg2):
+            _ = spi.xfer(msg)
+            time.sleep(spi_wait)
+
+    def go_oblique3(self, spd):
+        """Drive obliquely (quadrant 3) at spd (int between 0-255)."""
+        msg1 = [1+8, spd]
+        msg2 = [2, spd]
+        for msg in (msg1, msg2):
+            _ = spi.xfer(msg)
+            time.sleep(spi_wait)
+
+    def go_oblique4(self, spd):
+        """Drive obliquely (quadrant 4) at spd (int between 0-255)."""
+        msg1 = [4+8, spd]
+        msg2 = [3, spd]
+        for msg in (msg1, msg2):
+            _ = spi.xfer(msg)
+            time.sleep(spi_wait)
 
     def go_fwd(self, spd):
-        """Drive car forward at speed = spd i(int between 0-255)."""
+        """Drive car forward at speed = spd (int between 0-255)."""
         msg4 = [4, spd]  # High byte, Low byte
         msg3 = [3+8, spd]  # 4th bit in high byte -> reverse dir
         msg1 = [1, spd]
@@ -186,7 +219,7 @@ class OmniCar():
             time.sleep(spi_wait)
 
     def spin_ccw(self, spd):
-        """Spin car CCW at speed = spd i(int between 0-255)."""
+        """Spin car CCW at speed = spd (int between 0-255)."""
         for n in range(1, 5):
             _ = spi.xfer([n, spd])
             time.sleep(spi_wait)
