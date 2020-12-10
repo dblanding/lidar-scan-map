@@ -7,6 +7,8 @@ This project uses a Benewake TFMini Plus LiDAR module mounted to scan 180 degree
 ### Rotating LiDAR mounted on an Omni-Wheel type car:
 ![Omni Wheel Car with rotating LiDAR](images/omnicar.jpg)
 
+More about **Omni-Wheels** can be found [here](omni-wheels.md).
+
 The scan data are collected by a python program running on a Raspberry Pi 3B+.
 The python program
 * Collects data from the TFminiPlus on the serial port
