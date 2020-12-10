@@ -78,12 +78,15 @@ class OmniCar():
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_fwd(self, spd):
-        """Drive car forward at speed = spd (int between 0-255)."""
-        msg4 = [4, spd]  # High byte, Low byte
-        msg3 = [3+8, spd]  # 4th bit in high byte -> reverse dir
-        msg1 = [1, spd]
-        msg2 = [2+8, spd]
+    def go_fwd(self, spd, trim=None):
+        """Drive car forward at speed = spd (int between 0-255).
+        trim (int) is used to null out any unwanted spin."""
+        if not trim:
+            trim = 0
+        msg4 = [4, spd + trim]  # High byte, Low byte
+        msg3 = [3+8, spd - trim]  # 4th bit in high byte -> reverse dir
+        msg1 = [1, spd + trim]
+        msg2 = [2+8, spd - trim]
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
             time.sleep(spi_wait)

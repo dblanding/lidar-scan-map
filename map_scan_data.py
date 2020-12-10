@@ -244,7 +244,7 @@ def analyze_data(data):
     # Start with a "clean slate"
     global points
     points = []
-    
+
     # This next line populates points
     regions = find_segments(data)
 
@@ -260,7 +260,7 @@ def show_map(data, nmbr=None):
     # We need to start with a "clean slate"
     global points
     points = []
-    
+
     # This next line populates points
     segments = find_segments(data)
     if nmbr:
@@ -293,7 +293,7 @@ def show_map(data, nmbr=None):
         line_coords.append((pnt1, pnt2))
         plt.plot(x_vals, y_vals)
     pprint(line_coords)
-    
+
     plt.axis('equal')
     plt.savefig(imagefile)
     plt.clf()  # clears previous points & lines
