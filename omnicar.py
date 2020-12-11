@@ -42,44 +42,43 @@ class OmniCar():
         """
         class OmniCar
         Access functions of omni-wheel car.
-        Holds distance (cm) last measured by LiDAR module
         """
-        self.distance = 0
+        self.distance = 0  # distance (cm) last measured by LiDAR module
 
-    def go_oblique1(self, spd):
-        """Drive obliquely (quadrant 1) at spd (int between 0-255)."""
+    def go_FR(self, spd):
+        """Drive forward + right at spd (int between 0-255)."""
         msg1 = [1, spd]
         msg2 = [2+8, spd]
         for msg in (msg1, msg2):
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_oblique2(self, spd):
-        """Drive obliquely (quadrant 2) at spd (int between 0-255)."""
+    def go_FL(self, spd):
+        """Drive forward + left at spd (int between 0-255)."""
         msg1 = [4, spd]
         msg2 = [3+8, spd]
         for msg in (msg1, msg2):
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_oblique3(self, spd):
-        """Drive obliquely (quadrant 3) at spd (int between 0-255)."""
+    def go_BL(self, spd):
+        """Drive back + left at spd (int between 0-255)."""
         msg1 = [1+8, spd]
         msg2 = [2, spd]
         for msg in (msg1, msg2):
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_oblique4(self, spd):
-        """Drive obliquely (quadrant 4) at spd (int between 0-255)."""
+    def go_BR(self, spd):
+        """Drive back + right at spd (int between 0-255)."""
         msg1 = [4+8, spd]
         msg2 = [3, spd]
         for msg in (msg1, msg2):
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_fwd(self, spd, trim=None):
-        """Drive car forward at speed = spd (int between 0-255).
+    def go_F(self, spd, trim=None):
+        """Drive car forward at speed = spd (int: 0-255).
         trim (int) is used to null out any unwanted spin."""
         if not trim:
             trim = 0
@@ -91,8 +90,8 @@ class OmniCar():
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_back(self, spd):
-        """Drive car backward at speed = spd (int between 0-255)."""
+    def go_B(self, spd):
+        """Drive car backward at speed = spd (int: 0-255)."""
         msg4 = [4+8, spd]
         msg3 = [3, spd]
         msg1 = [1+8, spd]
@@ -101,8 +100,8 @@ class OmniCar():
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_left(self, spd):
-        """Drive car left at speed = spd (int between 0-255)."""
+    def go_L(self, spd):
+        """Drive car left at speed = spd (int: 0-255)."""
         msg4 = [4, spd]
         msg3 = [3+8, spd]
         msg1 = [1+8, spd]
@@ -111,8 +110,8 @@ class OmniCar():
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_right(self, spd):
-        """Drive car right at speed = spd (int between 0-255)."""
+    def go_R(self, spd):
+        """Drive car right at speed = spd (int: 0-255)."""
         msg4 = [4+8, spd]
         msg3 = [3, spd]
         msg1 = [1, spd]

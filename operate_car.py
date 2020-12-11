@@ -12,74 +12,75 @@ pause = 0.05  # sec pause time needed for wheel motor commands
 spd = 100  # car speed
 min_length = 20  # threshold min length to end of wall
 min_dist = 30  # threshold min distance from car to wall
+kp = 0.5  # steering proportional PID coefficient
+kd = 0.4  # steering derivative PID coefficient
 
-
-def obliq1(spd, t):
-    """Oblique jog (quadrant 1) at spd (int 0-255) for t seconds
+def jog_FR(spd, t):
+    """Jog forward + right at spd (int 0-255) for t seconds
     """
-    car.go_oblique1(spd)
+    car.go_FR(spd)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
 
-def obliq2(spd, t):
-    """Oblique jog (quadrant 2) at spd (int 0-255) for t seconds
+def jog_FL(spd, t):
+    """Jog forward + left at spd (int 0-255) for t seconds
     """
-    car.go_oblique2(spd)
+    car.go_FL(spd)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
 
-def obliq3(spd, t):
-    """Oblique jog (quadrant 3) at spd (int 0-255) for t seconds
+def jog_BL(spd, t):
+    """Jog back + left at spd (int 0-255) for t seconds
     """
-    car.go_oblique3(spd)
+    car.go_BL(spd)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
 
-def obliq4(spd, t):
-    """Oblique jog (quadrant 4) at spd (int 0-255) for t seconds
+def jog_BR(spd, t):
+    """Jog back + right at spd (int 0-255) for t seconds
     """
-    car.go_oblique4(spd)
+    car.go_BR(spd)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
 
-def fwd(spd, t, trim=5):
-    """Jog car forward at spd (int between 100-255) for t seconds
+def jog_F(spd, t, trim=5):
+    """Jog forward at spd (int: 100-255) for t seconds
     trim (int) is used to null out any unwanted spin.
     """
-    car.go_fwd(spd, trim)
+    car.go_F(spd, trim)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
 
-def back(spd, t):
-    """Jog car backward at spd (int between 100-255) for t seconds
+def jog_B(spd, t):
+    """Jog backward at spd (int: 100-255) for t seconds
     """
-    car.go_back(spd)
+    car.go_B(spd)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
 
-def left(spd, t):
-    """Jog car left at spd (int between 100-255) for t seconds
+def jog_L(spd, t):
+    """Jog left at spd (int: 100-255) for t seconds
     """
-    car.go_left(spd)
+    car.go_L(spd)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
 
-def right(spd, t):
-    """Jog car right at spd (int between 100-255) for t seconds
+def jog_R(spd, t):
+    """Jog right at spd (int: 100-255) for t seconds
     """
-    car.go_right(spd)
+    car.go_R(spd)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
 
-def cw(spd, t):
+def jog_cw(spd, t):
     """Spin car CW at spd (int between 100-255) for t seconds
     """
     car.spin_cw(spd)
@@ -87,7 +88,7 @@ def cw(spd, t):
     car.stop_wheels()
     time.sleep(pause)
 
-def ccw(spd, t):
+def jog_ccw(spd, t):
     """Spin car CCW at spd (int between 100-255) for t seconds
     """
     car.spin_ccw(spd)
@@ -112,8 +113,8 @@ def scan_series(nbr):
         if nbr:
             time.sleep(pause)
             # Move the car between successive scans
-            #ccw(100, 0.85)  # roughly 45 degrees
-            fwd(100, 1.5, trim=5)
+            jog_ccw(100, 0.5)  # ccw(100, 0.85) is roughly 45 degrees
+            # jog_F(100, 1.5, trim=5)
 
     # scan data can be reloaded by remap_scans(), if needed.
     with open('scan_data.pkl', 'wb') as f:
@@ -160,7 +161,7 @@ def drive_and_scan():
     print(f"x_dist: {x_dist}")
     print()
     if abs(x_dist) < min_dist:  # too close
-        car.go_right(spd)
+        car.go_R(spd)
         time.sleep(pause)
         print("Driving Right")
         print()
@@ -180,7 +181,7 @@ def drive_and_scan():
     trim = 3  # estimate of correct value
     time.sleep(pause)
     if length > min_length:
-        car.go_fwd(spd, trim=trim)
+        car.go_F(spd, trim=trim)
         time.sleep(pause)
         print("Driving Forward")
         print()
@@ -198,10 +199,10 @@ def drive_and_scan():
         p_term = angle - target
         d_term = angle - prev_angle
         prev_angle = angle
-        adjustment = int((p_term + d_term) / 3)  # just a WAG
+        adjustment = int((p_term * kp + d_term * kd))
         trim += adjustment
-        print(f"trim = {trim}")
-        car.go_fwd(spd, trim=trim)
+        print(f"p_term = {p_term}, d_term = {d_term}, trim = {trim}")
+        car.go_F(spd, trim=trim)
     car.stop_wheels()
     time.sleep(pause)
     print("Wheels Stopped")
@@ -213,9 +214,9 @@ def drive_and_scan():
 
 
 if __name__ == "__main__":
-    #scan_series(6)
     #remap_scans()
 
     drive_and_scan()
     time.sleep(1)
+    scan_series(6)
     car.close()
