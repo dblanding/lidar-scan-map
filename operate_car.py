@@ -214,10 +214,11 @@ def drive_and_scan():
 
 
 if __name__ == "__main__":
-    #remap_scans()
+    
+    remap_scans()
     '''
     drive_and_scan()
     time.sleep(1)
     '''
-    scan_series(6)
+    #scan_series(6)
     car.close()

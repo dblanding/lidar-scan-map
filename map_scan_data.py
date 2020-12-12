@@ -15,6 +15,7 @@ filename = "scanMaps/scanMap"
 # detection level thesholds
 GAP = 6  # keep this value small to only see things that are close
 CORNER = 6
+END_HOOK_LIMIT = 2  # max distance between end point and 'inner' base line
 
 # global values
 points = []  # list of point type items
@@ -205,6 +206,21 @@ def find_segments(data, start=10000, end=30000):
     for region in regions:
         if region[0] == region[-1]:
             regions.remove(region)
+
+    # Remove the end point(s) of a region if they are not on base line
+    for n, region in enumerate(regions):
+        start_idx = region[0]
+        end_idx = region[-1]
+        first_point = points[start_idx].xy
+        last_point = points[end_idx].xy
+        # find 'inner' base line points with first and last points removed
+        pt1, pt2  = (points[start_idx + 1].xy, points[end_idx -1].xy)
+        line = cnvrt_2pts_to_coef(pt1, pt2)
+        if p2line_dist(first_point, line) > END_HOOK_LIMIT:
+            start_idx += 1
+        if p2line_dist(last_point, line) > END_HOOK_LIMIT:
+            end_idx -= 1
+        regions[n] = (start_idx, end_idx)
 
     print("Continuous regions: ", regions)
 
