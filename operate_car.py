@@ -97,13 +97,13 @@ def jog_ccw(spd, t):
     car.stop_wheels()
     time.sleep(pause)
 
-def scan_series(nbr):
+def scan_series(nbr, lev=10000, hev=30000):
     """Perform a series of nbr successive scans, moving car between scans.
     Save scan data. Generate and save maps.
     """
     data_list = []  # list of scan data from multiple scans
     while nbr:
-        scan_data = car.scan(low_enc_val=20000, hi_enc_val=30000)
+        scan_data = car.scan(low_enc_val=lev, hi_enc_val=hev)
         print(scan_data[0])
         print("Number of data points: ", len(scan_data))
         scan_data.pop(0)  # may have 'stale' serial data
@@ -114,8 +114,8 @@ def scan_series(nbr):
         if nbr:
             time.sleep(pause)
             # Move the car between successive scans
-            jog_R(100, 0.75)  # ccw(100, 0.85) is roughly 45 degrees
-            # jog_F(100, 1.5, trim=5)
+            # jog_R(100, 0.75)
+            jog_F(100, 1.0, trim=5)
 
     # scan data can be reloaded by remap_scans(), if needed.
     with open('scan_data.pkl', 'wb') as f:
@@ -127,10 +127,11 @@ def scan_series(nbr):
         print(f"Scan number {n+1} of {len(data_list)}")
         map_scan_data.show_map(scan_data, n+1)
 
-def remap_scans():
+def remap_scans(filename):
     """Load saved scan data and remap (with different map parameters).
     """
-    with open('scan_data.pkl', 'rb') as f:
+    # filename: 'scan_data.pkl' or 'corner_data.pkl'
+    with open(filename, 'rb') as f:
         data_list = pickle.load(f)
 
     for n, scan_data in enumerate(data_list):
@@ -154,7 +155,7 @@ def drive_and_scan():
     prev_angle = target
     # Before driving along wall, move the car sideways until it is at
     # least the minimum desired distance from the wall at left.
-    scan_data = car.scan()
+    scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
     data_list.append(scan_data)
     length, angle, x_dist = map_scan_data.analyze_data(scan_data)
     print(f"length: {length}")
@@ -164,10 +165,10 @@ def drive_and_scan():
     if abs(x_dist) < min_dist:  # too close to wall
         car.go_R(spd)
         time.sleep(pause)
-        print("Driving Right")
+        print("Driving away from wall")
         print()
     while abs(x_dist) < min_dist:  # get farther from wall
-        scan_data = car.scan()
+        scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
         data_list.append(scan_data)
         length, angle, x_dist = map_scan_data.analyze_data(scan_data)
         print(f"length: {length}")
@@ -184,10 +185,10 @@ def drive_and_scan():
     if length > min_length:  # drive toward end of wall
         car.go_F(spd, trim=trim)
         time.sleep(pause)
-        print("Driving Forward")
+        print("Driving along wall")
         print()
     while length > min_length:  # continue while steering
-        scan_data = car.scan()
+        scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
         data_list.append(scan_data)
         length, angle, x_dist = map_scan_data.analyze_data(scan_data)
         print(f"length: {length}")
@@ -212,13 +213,50 @@ def drive_and_scan():
     with open('scan_data.pkl', 'wb') as f:
         pickle.dump(data_list, f)
 
+def cross_corner_scan():
+    data_list = []  # list of data from multiple scans
+    
+    scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
+    data_list.append(scan_data)
+    length, angle, x_dist = map_scan_data.analyze_data(scan_data)
+    print(f"length: {length}")
+    print(f"angle: {angle}")
+    print(f"x_dist: {x_dist}")
+    print()
+    car.go_F(spd, trim=7)
+    time.sleep(pause)
+    print("Driving across corner")
+    print()
+    while angle < 90:
+        scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
+        data_list.append(scan_data)
+        length, angle, x_dist = map_scan_data.analyze_data(scan_data)
+        print(f"length: {length}")
+        print(f"angle: {angle}")
+        print(f"x_dist: {x_dist}")
+        print()
+    time.sleep(2)
+    car.stop_wheels()
+    time.sleep(pause)
+    print("Wheels Stopped")
+    print()
+    # Save collected scan data
+    # Use remap_scans() to map it.
+    with open('corner_data.pkl', 'wb') as f:
+        pickle.dump(data_list, f)
+
 
 if __name__ == "__main__":
     
-    remap_scans()
+    remap_scans('corner_data.pkl')
     '''
-    drive_and_scan()
-    time.sleep(1)
+    while True:
+        drive_and_scan()
+        time.sleep(1)
+        print("Turning 45 degrees CCW")
+        jog_ccw(100, 1.1)  # roughly 45 degrees
+        cross_corner_scan()
+        print("Turning 45 degrees CCW")
+        jog_ccw(100, 1.1)  # roughly 45 degrees
     '''
-    #scan_series(6)
     car.close()
