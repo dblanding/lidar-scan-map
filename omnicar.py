@@ -14,7 +14,7 @@ are sent from the Raspberry Pi to the Arduino on the SPI bus, with
 the Raspberry Pi configured as SPI master, and the Arduino as slave.
 
 Wheel motors:
-For an explanation of how the wheel motors are driven, see omni-wheels.md
+See omni-wheels.md for an explanation of wheel motor drive.
 """
 
 import Adafruit_ADS1x15
@@ -37,61 +37,46 @@ spi_wait = .006  # wait time (sec) between successive spi commands
 
 
 class OmniCar():
+    """
+    class OmniCar: Access all functions of omni-wheel car.
+    """
 
     def __init__(self):
         """
-        class OmniCar
-        Access functions of omni-wheel car.
+        Constructor for omni-wheel car.
+        Store distance as attribute.
         """
-        self.distance = 0  # distance (cm) last measured by LiDAR module
+        self.distance = 0  # distance (cm) of last measured LiDAR value
 
-    def go_FR(self, spd):
-        """Drive forward + right at spd (int between 0-255)."""
-        msg1 = [1, spd]
-        msg2 = [2+8, spd]
-        for msg in (msg1, msg2):
-            _ = spi.xfer(msg)
-            time.sleep(spi_wait)
-
-    def go_FL(self, spd):
-        """Drive forward + left at spd (int between 0-255)."""
-        msg1 = [4, spd]
-        msg2 = [3+8, spd]
-        for msg in (msg1, msg2):
-            _ = spi.xfer(msg)
-            time.sleep(spi_wait)
-
-    def go_BL(self, spd):
-        """Drive back + left at spd (int between 0-255)."""
-        msg1 = [1+8, spd]
-        msg2 = [2, spd]
-        for msg in (msg1, msg2):
-            _ = spi.xfer(msg)
-            time.sleep(spi_wait)
-
-    def go_BR(self, spd):
-        """Drive back + right at spd (int between 0-255)."""
-        msg1 = [4+8, spd]
-        msg2 = [3, spd]
-        for msg in (msg1, msg2):
-            _ = spi.xfer(msg)
-            time.sleep(spi_wait)
+    def run_mtr(self, mtr, spd, rev=False):
+        """
+        Drive motor = mtr (int 0-7) at speed = spd (int 0-255)
+        in reverse direction if rev=True.
+        """
+        if not rev:
+            msg = [mtr, spd]  # High byte, Low byte
+        else:
+            msg = [mtr+8, spd]  # 4th bit in high byte -> reverse dir
+        _ = spi.xfer(msg)
 
     def go_F(self, spd, trim=None):
-        """Drive car forward at speed = spd (int: 0-255).
-        trim (int) is used to null out any unwanted spin."""
+        """Drive forward at speed = spd with steering trim."""
         if not trim:
             trim = 0
-        msg4 = [4, spd + trim]  # High byte, Low byte
-        msg3 = [3+8, spd - trim]  # 4th bit in high byte -> reverse dir
+        spd, trim = self.govern(spd, trim)
+        msg4 = [4, spd + trim]
+        msg3 = [3+8, spd - trim]
         msg1 = [1, spd + trim]
         msg2 = [2+8, spd - trim]
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_B(self, spd):
-        """Drive car backward at speed = spd (int: 0-255)."""
+    def go_B(self, spd, trim=None):
+        """Drive backward at speed = spd with steering trim."""
+        if not trim:
+            trim = 0
+        spd, trim = self.govern(spd, trim)
         msg4 = [4+8, spd]
         msg3 = [3, spd]
         msg1 = [1+8, spd]
@@ -100,8 +85,11 @@ class OmniCar():
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_L(self, spd):
-        """Drive car left at speed = spd (int: 0-255)."""
+    def go_L(self, spd, trim=None):
+        """Drive left at speed = spd with steering trim."""
+        if not trim:
+            trim = 0
+        spd, trim = self.govern(spd, trim)
         msg4 = [4, spd]
         msg3 = [3+8, spd]
         msg1 = [1+8, spd]
@@ -110,12 +98,15 @@ class OmniCar():
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_R(self, spd):
-        """Drive car right at speed = spd (int: 0-255)."""
-        msg4 = [4+8, spd]
-        msg3 = [3, spd]
-        msg1 = [1, spd]
-        msg2 = [2+8, spd]
+    def go_R(self, spd, trim=None):
+        """Drive right at speed = spd with steering trim."""
+        if not trim:
+            trim = 0
+        spd, trim = self.govern(spd, trim)
+        msg4 = [4+8, spd - trim]
+        msg3 = [3, spd + trim]
+        msg1 = [1, spd + trim]
+        msg2 = [2+8, spd - trim]
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
@@ -132,21 +123,58 @@ class OmniCar():
             _ = spi.xfer([n+8, spd])
             time.sleep(spi_wait)
 
-    def run_mtr(self, mtr, spd, rev=False):
+    def govern(self, spd, trim):
+        """limit max values of spd and trim.
+        spd + trim must not exceed 255.
         """
-        Drive motor = mtr (int 0-7) at speed = spd (int 0-255)
-        in reverse direction if rev=True.
-        """
-        if rev:
-            msg = [mtr+8, spd]
-        else:
-            msg = [mtr, spd]
-        _ = spi.xfer(msg)
+        if spd > 240:
+            spd = 240
+        if trim > 15:
+            trim = 15
+        if trim < -15:
+            trim = -15
+        return spd, trim
 
     def stop_wheels(self):
         """Stop all wheel motors (mtr numbers: 1 thrugh 4)."""
         for n in range(1, 5):
             _ = spi.xfer([n, 0])
+            time.sleep(spi_wait)
+
+    def go_FR(self, spd, trim=None):
+        """Drive diagonally forward + right at speed = spd
+        with steering trim."""
+        if not trim:
+            trim = 0
+        spd, trim = self.govern(spd, trim)
+        msg1 = [1, spd + trim]
+        msg2 = [2+8, spd - trim]
+        for msg in (msg1, msg2):
+            _ = spi.xfer(msg)
+            time.sleep(spi_wait)
+
+    def go_FL(self, spd):
+        """Drive diagonally forward + left at spd (int between 0-255)."""
+        msg1 = [4, spd]
+        msg2 = [3+8, spd]
+        for msg in (msg1, msg2):
+            _ = spi.xfer(msg)
+            time.sleep(spi_wait)
+
+    def go_BL(self, spd):
+        """Drive diagonally back + left at spd (int between 0-255)."""
+        msg1 = [1+8, spd]
+        msg2 = [2, spd]
+        for msg in (msg1, msg2):
+            _ = spi.xfer(msg)
+            time.sleep(spi_wait)
+
+    def go_BR(self, spd):
+        """Drive diagonally back + right at spd (int between 0-255)."""
+        msg1 = [4+8, spd]
+        msg2 = [3, spd]
+        for msg in (msg1, msg2):
+            _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
     def read_dist(self):
@@ -165,6 +193,10 @@ class OmniCar():
             ser.flushInput()  # Keep the buffer empty (purge stale data)
         return counter
 
+    def get_enc_val(self):
+        """Return encoder value."""
+        return adc.read_adc(0, gain=GAIN, data_rate=250)
+
     def scan_mtr_start(self, spd=None):
         """Turn scan motor on at speed = spd (int between 0-255)."""
         if not spd:
@@ -175,25 +207,26 @@ class OmniCar():
         """Turn scan motor off."""
         self.run_mtr(7, 0)
 
-    def scan(self):
-        """Return list of tuples of scan data values.
+    def scan(self, low_enc_val=10000, hi_enc_val=30000):
+        """Return list of tuples of scan data for encoder values between
+        low_enc_val and hi_enc_val.
         """
-        enc_val = adc.read_adc(0, gain=GAIN, data_rate=250)
+        enc_val = self.get_enc_val()
         # If scan rotor isn't near BDC (back dead cntr), go to BDC
         if enc_val > 3000:
             self.scan_mtr_start()
             while enc_val < 32767:  # continue as values increase to max
-                enc_val = adc.read_adc(0, gain=GAIN)
+                enc_val = self.get_enc_val()
             while enc_val == 32767:  # continue to back dead cntr
-                enc_val = adc.read_adc(0, gain=GAIN)
+                enc_val = self.get_enc_val()
         else:
             self.scan_mtr_start()
-            enc_val = adc.read_adc(0, gain=GAIN, data_rate=250)
+            enc_val = self.get_enc_val()
         last_time = time.time()
         data = []
         while enc_val < 32767:  # continue as values increase to max
-            enc_val = adc.read_adc(0, gain=GAIN, data_rate=250)
-            if 10000 < enc_val < 30000:  # 20000 is 'straight ahead'
+            enc_val = self.get_enc_val()
+            if low_enc_val < enc_val < hi_enc_val:  # 20000 is 'straight ahead'
                 counter = self.read_dist()
                 now = time.time()
                 delta_t = str(now - last_time)

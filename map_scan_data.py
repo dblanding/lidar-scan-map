@@ -13,7 +13,7 @@ style.use('fivethirtyeight')
 filename = "scanMaps/scanMap"
 
 # detection level thesholds
-GAP = 10
+GAP = 6  # keep this value small to only see things that are close
 CORNER = 6
 
 # global values
@@ -130,12 +130,13 @@ def _find_continuous_regions():
     return regions
 
 
-def find_segments(data):
+def find_segments(data, start=10000, end=30000):
     """
-    Read raw scan_data (list) in which each line contains 4 vlues:
+    Read raw scan_data (list) in which each line contains 4 values:
     encoder_count, distance, byte_count, delta_time.
-    Populate global points (list of points) and return
-    regions, a list of pairs of index values representing
+    Populate global points list with only those points whose
+    encoder values are within the range:  start <= enc_val <= end
+    Return regions, a list of pairs of index values representing
     the end points of straight line segments that fit the data.
     """
     global points
@@ -233,20 +234,18 @@ def indexes_in_regions(regions):
         indexes.extend([idx for idx in range(region[0], region[-1]+1)])
     return indexes
 
-def analyze_data(data):
+def analyze_data(data, start=10000, end=30000):
     """
-    Examine the first segment (line defined by the first region)
-    This is the line directly to the left of the car.
-    Return information about this line to aid navigation.
-    Step 1: Square up to the line (wall).
-    Step 2: Drive parallel to the wall until it runs out.
+    Examine data in sector of interest (points whose encoder values
+    are between start & end) and return information about the line
+    segment(s) defined by the region(s) found.
     """
     # Start with a "clean slate"
     global points
     points = []
 
     # This next line populates points
-    regions = find_segments(data)
+    regions = find_segments(data, start=start, end=end)
 
     start_coords = points[regions[0][0]].xy
     end_coords = points[regions[0][1]].xy
