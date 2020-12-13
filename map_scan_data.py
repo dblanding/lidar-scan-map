@@ -10,11 +10,10 @@ import os
 from pprint import pprint
 
 style.use('fivethirtyeight')
-filename = "scanMaps/scanMap"
 
 # detection level thesholds
 GAP = 6  # keep this value small to only see things that are close
-CORNER = 6
+CORNER = 3
 END_HOOK_LIMIT = 2  # max distance between end point and 'inner' base line
 
 # global values
@@ -260,21 +259,28 @@ def analyze_data(data, start=10000, end=30000):
     global points
     points = []
 
-    # This next line populates points
+    # This next line populates points as a side effect
     regions = find_segments(data, start=start, end=end)
+    if not regions:
+        with open('scan_data.pkl', 'wb') as f:
+            pickle.dump(data, f)
 
-    start_coords = points[regions[0][0]].xy
-    end_coords = points[regions[0][1]].xy
-    left_wall_length = p2p_dist(start_coords, end_coords)
-    left_wall_angle = p2p_angle(start_coords, end_coords)
-    left_wall_x_value = (start_coords[0] + end_coords[0]) / 2
+    # monitor first region
+    start_idx = regions[0][0]
+    end_idx = regions[0][1]
+    start_coords = points[start_idx].xy
+    end_coords = points[end_idx].xy
+    length = p2p_dist(start_coords, end_coords)
+    angle = p2p_angle(start_coords, end_coords)
+    x_value = (start_coords[0] + end_coords[0]) / 2
 
-    return left_wall_length, left_wall_angle, left_wall_x_value
+    return start_idx, end_idx, length, angle, x_value
 
-def show_map(data, nmbr=None):
+def show_map(data, map_folder, nmbr=None):
     # We need to start with a "clean slate"
     global points
     points = []
+    filename = f"{map_folder}/scanMap"
 
     # This next line populates points
     segments = find_segments(data)

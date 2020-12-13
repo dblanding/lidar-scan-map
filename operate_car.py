@@ -23,26 +23,26 @@ def jog_FR(spd, t, trim=5):
     car.stop_wheels()
     time.sleep(pause)
 
-def jog_FL(spd, t):
+def jog_FL(spd, t, trim=5):
     """Jog diagonally forward + left at spd (int 0-255) for t seconds
     """
-    car.go_FL(spd)
+    car.go_FL(spd, trim)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
 
-def jog_BL(spd, t):
+def jog_BL(spd, t, trim=5):
     """Jog diagonally back + left at spd (int 0-255) for t seconds
     """
-    car.go_BL(spd)
+    car.go_BL(spd, trim)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
 
-def jog_BR(spd, t):
+def jog_BR(spd, t, trim=5):
     """Jog diagonally back + right at spd (int 0-255) for t seconds
     """
-    car.go_BR(spd)
+    car.go_BR(spd, trim)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
@@ -56,18 +56,20 @@ def jog_F(spd, t, trim=5):
     car.stop_wheels()
     time.sleep(pause)
 
-def jog_B(spd, t):
+def jog_B(spd, t, trim=5):
     """Jog backward at spd (int: 100-255) for t seconds
+    trim (int) is used to null out any unwanted spin.
     """
-    car.go_B(spd)
+    car.go_B(spd, trim)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
 
-def jog_L(spd, t):
+def jog_L(spd, t, trim=5):
     """Jog left at spd (int: 100-255) for t seconds
+    trim (int) is used to null out any unwanted spin.
     """
-    car.go_L(spd)
+    car.go_L(spd, trim)
     time.sleep(t)
     car.stop_wheels()
     time.sleep(pause)
@@ -98,8 +100,10 @@ def jog_ccw(spd, t):
     time.sleep(pause)
 
 def scan_series(nbr, lev=10000, hev=30000):
-    """Perform a series of nbr successive scans, moving car between scans.
-    Save scan data. Generate and save maps.
+    """Perform a series of nbr successive scans of angular sector from
+    lev (low encoder value) to hev (high encoder value), moving the car
+    between scans. Save the raw scan data as a pickle file.
+    Generate & save map plots.
     """
     data_list = []  # list of scan data from multiple scans
     while nbr:
@@ -117,7 +121,7 @@ def scan_series(nbr, lev=10000, hev=30000):
             # jog_R(100, 0.75)
             jog_F(100, 1.0, trim=5)
 
-    # scan data can be reloaded by remap_scans(), if needed.
+    # Save scan data for later examination, if desired.
     with open('scan_data.pkl', 'wb') as f:
         pickle.dump(data_list, f)
 
@@ -127,37 +131,44 @@ def scan_series(nbr, lev=10000, hev=30000):
         print(f"Scan number {n+1} of {len(data_list)}")
         map_scan_data.show_map(scan_data, n+1)
 
-def remap_scans(filename):
-    """Load saved scan data and remap (with different map parameters).
+def remap_scans():
+    """Load saved scan data and generate maps.
     """
-    # filename: 'scan_data.pkl' or 'corner_data.pkl'
-    with open(filename, 'rb') as f:
-        data_list = pickle.load(f)
+    modes = ('straight', 'corner')
+    for mode in modes:
+        if mode == 'straight':
+            data_file = 'scan_data.pkl'
+            map_folder = 'sideMaps'
+        elif mode == 'corner':
+            data_file = 'corner_data.pkl'
+            map_folder = 'cornerMaps'
+        with open(data_file, 'rb') as f:
+            data_list = pickle.load(f)
 
-    for n, scan_data in enumerate(data_list):
-        print()
-        print(f"Scan number {n+1} of {len(data_list)}")
-        map_scan_data.show_map(scan_data, n+1)
+        for n, scan_data in enumerate(data_list):
+            print()
+            print(f"Scan number {n+1} of {len(data_list)}")
+            map_scan_data.show_map(scan_data, map_folder, n+1)
 
 def drive_and_scan():
     """
-    Drive parallel to wall on left keeping track of
-    its parameters: length, angle, and x_dist
-    length: distance from projection of car to the end of wall.
-    angle: angle of the wall w/r/t car's X axis. taget = 90 degrees
-    x_dist: lateral distance to the wall (in x direction)
+    Drive parallel to wall on left keeping track of its parameters:
+        length: distance from projection of car to the end of wall.
+        angle: angle of the wall w/r/t car's X axis. target = 90 degrees
+        x_dist: lateral distance to the wall (in x direction)
     Start out initially so that x_dist >= min_dist
     Stop the car when the value of length drops below min_length.
-    While driving, adjust steering trim to minimaize error.
+    While driving, adjust steering trim to minimize angle error.
     """
     data_list = []  # list of data from multiple scans
     target = 90  # angle (degrees)
-    prev_angle = target
-    # Before driving along wall, move the car sideways until it is at
-    # least the minimum desired distance from the wall at left.
+
+    # Before driving along wall, move the car sideways until it is
+    # at least the minimum desired distance from the wall at left.
     scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
     data_list.append(scan_data)
-    length, angle, x_dist = map_scan_data.analyze_data(scan_data)
+    start_idx, end_idx, length, angle, x_dist = map_scan_data.analyze_data(scan_data)
+    threshold_idx = (start_idx + end_idx) / 2
     print(f"length: {length}")
     print(f"angle: {angle}")
     print(f"x_dist: {x_dist}")
@@ -167,22 +178,24 @@ def drive_and_scan():
         time.sleep(pause)
         print("Driving away from wall")
         print()
-    while abs(x_dist) < min_dist:  # get farther from wall
-        scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
-        data_list.append(scan_data)
-        length, angle, x_dist = map_scan_data.analyze_data(scan_data)
-        print(f"length: {length}")
-        print(f"angle: {angle}")
-        print(f"x_dist: {x_dist}")
-        print()
-        prev_angle = angle
+        while abs(x_dist) < min_dist:  # move farther from wall
+            scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
+            data_list.append(scan_data)
+            start_idx, end_idx, length, angle, x_dist = map_scan_data.analyze_data(scan_data)
+            threshold_idx = (start_idx + end_idx) / 2
+            print(f"length: {length}")
+            print(f"angle: {angle}")
+            print(f"x_dist: {x_dist}")
+            print()
+
     car.stop_wheels()
     print("Wheels Stopped")
     print()
+
     prev_angle = angle
     trim = 3  # estimate of correct steering trim
     time.sleep(pause)
-    if length > min_length:  # drive toward end of wall
+    if length > min_length:  # drive along wall
         car.go_F(spd, trim=trim)
         time.sleep(pause)
         print("Driving along wall")
@@ -190,7 +203,12 @@ def drive_and_scan():
     while length > min_length:  # continue while steering
         scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
         data_list.append(scan_data)
-        length, angle, x_dist = map_scan_data.analyze_data(scan_data)
+        start_idx, end_idx, length, angle, x_dist = map_scan_data.analyze_data(scan_data)
+        if start_idx > threshold_idx:
+            print("Left wall gone from view: Exiting loop")
+            break
+        else:
+            threshold_idx = (start_idx + end_idx) / 2
         print(f"length: {length}")
         print(f"angle: {angle}")
         print(f"x_dist: {x_dist}")
@@ -214,11 +232,17 @@ def drive_and_scan():
         pickle.dump(data_list, f)
 
 def cross_corner_scan():
+    """
+    Traverse corner from the end of one wall to the start of the next:
+        drive forward while scanning
+        watch for angle to flip from 45 (old wall) to 135 (new wall)
+        then keep going a little farther
+    """
     data_list = []  # list of data from multiple scans
     
     scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
     data_list.append(scan_data)
-    length, angle, x_dist = map_scan_data.analyze_data(scan_data)
+    strt_idx, end_idx, length, angle, x_dist = map_scan_data.analyze_data(scan_data)
     print(f"length: {length}")
     print(f"angle: {angle}")
     print(f"x_dist: {x_dist}")
@@ -227,15 +251,18 @@ def cross_corner_scan():
     time.sleep(pause)
     print("Driving across corner")
     print()
-    while angle < 90:
+    xtra_loops = 2  # number of extra times to go through loop below
+    more = 0  # flag to go through loop below more times
+    while angle < 90 or more < xtra_loops:
         scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
         data_list.append(scan_data)
-        length, angle, x_dist = map_scan_data.analyze_data(scan_data)
+        strt_idx, end_idx, length, angle, x_dist = map_scan_data.analyze_data(scan_data)
         print(f"length: {length}")
         print(f"angle: {angle}")
         print(f"x_dist: {x_dist}")
         print()
-    time.sleep(2)
+        if angle > 90:
+            more += 1
     car.stop_wheels()
     time.sleep(pause)
     print("Wheels Stopped")
@@ -247,16 +274,16 @@ def cross_corner_scan():
 
 
 if __name__ == "__main__":
-    
-    remap_scans('corner_data.pkl')
-    '''
-    while True:
+
+    nmbr_of_loops = 1
+    while nmbr_of_loops:
         drive_and_scan()
-        time.sleep(1)
         print("Turning 45 degrees CCW")
         jog_ccw(100, 1.1)  # roughly 45 degrees
         cross_corner_scan()
         print("Turning 45 degrees CCW")
         jog_ccw(100, 1.1)  # roughly 45 degrees
-    '''
+        nmbr_of_loops -= 1
+
+    remap_scans()
     car.close()

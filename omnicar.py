@@ -153,26 +153,38 @@ class OmniCar():
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_FL(self, spd):
-        """Drive diagonally forward + left at spd (int between 0-255)."""
-        msg1 = [4, spd]
-        msg2 = [3+8, spd]
+    def go_FL(self, spd, trim=None):
+        """Drive diagonally forward + left at speed = spd
+        with steering trim."""
+        if not trim:
+            trim = 0
+        spd, trim = self.govern(spd, trim)
+        msg1 = [4, spd + trim]
+        msg2 = [3+8, spd - trim]
         for msg in (msg1, msg2):
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_BL(self, spd):
-        """Drive diagonally back + left at spd (int between 0-255)."""
-        msg1 = [1+8, spd]
-        msg2 = [2, spd]
+    def go_BL(self, spd, trim=None):
+        """Drive diagonally back + left at speed = spd
+        with steering trim."""
+        if not trim:
+            trim = 0
+        spd, trim = self.govern(spd, trim)
+        msg1 = [1+8, spd - trim]
+        msg2 = [2, spd + trim]
         for msg in (msg1, msg2):
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
 
-    def go_BR(self, spd):
-        """Drive diagonally back + right at spd (int between 0-255)."""
-        msg1 = [4+8, spd]
-        msg2 = [3, spd]
+    def go_BR(self, spd, trim=None):
+        """Drive diagonally back + right at speed = spd
+        with steering trim."""
+        if not trim:
+            trim = 0
+        spd, trim = self.govern(spd, trim)
+        msg1 = [4+8, spd - trim]
+        msg2 = [3, spd + trim]
         for msg in (msg1, msg2):
             _ = spi.xfer(msg)
             time.sleep(spi_wait)
@@ -194,7 +206,7 @@ class OmniCar():
         return counter
 
     def get_enc_val(self):
-        """Return encoder value."""
+        """Return encoder value from LiDAR rotor angular encoder."""
         return adc.read_adc(0, gain=GAIN, data_rate=250)
 
     def scan_mtr_start(self, spd=None):
