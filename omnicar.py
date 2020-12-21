@@ -18,12 +18,12 @@ Wheel motors:
 See omni-wheels.md for an explanation of wheel motor drive.
 """
 
-import Adafruit_ADS1x15
+import time
 import math
 import serial
 import smbus
 import spidev
-import time
+import Adafruit_ADS1x15
 
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain
@@ -31,22 +31,37 @@ GAIN = 1  #ADC gain
 ser = serial.Serial("/dev/ttyS0", 115200)
 
 spi = spidev.SpiDev()  # Enable SPI
-spibus = 0  # We only have SPI bus 0 available to us on the Pi
-device = 0  # Device is the chip select pin. Set to 0 or 1
-spi.open(spibus, device)  # Open a connection
+SPIBUS = 0  # We only have SPI bus 0 available to us on the Pi
+DEVICE = 0  # Device is the chip select pin. Set to 0 or 1
+spi.open(SPIBUS, DEVICE)  # Open a connection
 spi.max_speed_hz = 500000  # Set SPI speed and mode
 spi.mode = 0
-spi_wait = .006  # wait time (sec) between successive spi commands
+SPI_WAIT = .006  # wait time (sec) between successive spi commands
 
 i2cbus = smbus.SMBus(1)
 HMC5883_ADDRESS = 0x1e   # 0x3c >> 1
 # HMC5883L Registers and their Address
-Register_A     = 0x00  # Address of Configuration register A
-Register_B     = 0x01  # Address of configuration register B
-Register_mode  = 0x02  # Address of mode register
-X_axis_H = 0x03  # Address of X-axis MSB data register
-Z_axis_H = 0x05  # Address of Z-axis MSB data register
-Y_axis_H = 0x07  # Address of Y-axis MSB data register
+REGISTER_A = 0x00  # Address of Configuration register A
+REGISTER_B = 0x01  # Address of configuration register B
+REGISTER_MODE = 0x02  # Address of mode register
+X_AXIS_H = 0x03  # Address of X-axis MSB data register
+Z_AXIS_H = 0x05  # Address of Z-axis MSB data register
+Y_AXIS_H = 0x07  # Address of Y-axis MSB data register
+
+def read_raw_data(addr):
+    """Read from HMC5883L data registers"""
+
+    # Read raw 16-bit value
+    high = i2cbus.read_byte_data(HMC5883_ADDRESS, addr)
+    low = i2cbus.read_byte_data(HMC5883_ADDRESS, addr+1)
+
+    # concatenate higher and lower value
+    value = ((high << 8) | low)
+
+    # to get signed value from module
+    if value > 32768:
+        value = value - 65536
+    return value
 
 
 class OmniCar():
@@ -61,39 +76,24 @@ class OmniCar():
 
         # write to Configuration Register A
         # average 8 samples per measurement output
-        i2cbus.write_byte_data(HMC5883_ADDRESS, Register_A, 0x70)
+        i2cbus.write_byte_data(HMC5883_ADDRESS, REGISTER_A, 0x70)
 
         # Write to Configuration Register B for gain
         # Use default gain
-        i2cbus.write_byte_data(HMC5883_ADDRESS, Register_B, 0x20)
+        i2cbus.write_byte_data(HMC5883_ADDRESS, REGISTER_B, 0x20)
 
         # Write to mode Register to specify mode
         # 0x01 (single measurement mode) is default
         # 0x00 (continuous measurenent mode)
-        i2cbus.write_byte_data(HMC5883_ADDRESS, Register_mode, 0x00)
-
-    def read_raw_data(self, addr):
-        """Read from HMC5883L data registers"""
-
-        # Read raw 16-bit value
-        high = i2cbus.read_byte_data(HMC5883_ADDRESS, addr)
-        low = i2cbus.read_byte_data(HMC5883_ADDRESS, addr+1)
-
-        # concatenate higher and lower value
-        value = ((high << 8) | low)
-
-        # to get signed value from module
-        if(value > 32768):
-            value = value - 65536
-        return value
+        i2cbus.write_byte_data(HMC5883_ADDRESS, REGISTER_MODE, 0x00)
 
     def heading(self):
         """Return magnetic compass heading of car (degrees)."""
 
         # Read Accelerometer raw value
-        x = self.read_raw_data(X_axis_H)
-        z = self.read_raw_data(Z_axis_H)
-        y = self.read_raw_data(Y_axis_H)
+        x = read_raw_data(X_AXIS_H)
+        z = read_raw_data(Z_AXIS_H)
+        y = read_raw_data(Y_AXIS_H)
         # print(x, y, z)
         # working in radians...
         heading = math.atan2(y, x)
@@ -102,7 +102,7 @@ class OmniCar():
         heading = heading - math.pi / 2
 
         # check for sign
-        if(heading < 0):
+        if heading < 0:
             heading += 2 * math.pi
 
         # convert into angle
@@ -132,7 +132,7 @@ class OmniCar():
         msg2 = [2+8, spd - trim]
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
-            time.sleep(spi_wait)
+            time.sleep(SPI_WAIT)
 
     def go_B(self, spd, trim=None):
         """Drive backward at speed = spd with steering trim."""
@@ -145,7 +145,7 @@ class OmniCar():
         msg2 = [2, spd]
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
-            time.sleep(spi_wait)
+            time.sleep(SPI_WAIT)
 
     def go_L(self, spd, trim=None):
         """Drive left at speed = spd with steering trim."""
@@ -158,7 +158,7 @@ class OmniCar():
         msg2 = [2, spd]
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
-            time.sleep(spi_wait)
+            time.sleep(SPI_WAIT)
 
     def go_R(self, spd, trim=None):
         """Drive right at speed = spd with steering trim."""
@@ -171,19 +171,19 @@ class OmniCar():
         msg2 = [2+8, spd - trim]
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
-            time.sleep(spi_wait)
+            time.sleep(SPI_WAIT)
 
     def spin_ccw(self, spd):
         """Spin car CCW at speed = spd (int between 0-255)."""
         for n in range(1, 5):
             _ = spi.xfer([n, spd])
-            time.sleep(spi_wait)
+            time.sleep(SPI_WAIT)
 
     def spin_cw(self, spd):
         """Spin car CW at speed = spd (int between 0-255)."""
         for n in range(1, 5):
             _ = spi.xfer([n+8, spd])
-            time.sleep(spi_wait)
+            time.sleep(SPI_WAIT)
 
     def govern(self, spd, trim):
         """limit max values of spd and trim.
@@ -201,7 +201,7 @@ class OmniCar():
         """Stop all wheel motors (mtr numbers: 1 thrugh 4)."""
         for n in range(1, 5):
             _ = spi.xfer([n, 0])
-            time.sleep(spi_wait)
+            time.sleep(SPI_WAIT)
 
     def go_FR(self, spd, trim=None):
         """Drive diagonally forward + right at speed = spd
@@ -213,7 +213,7 @@ class OmniCar():
         msg2 = [2+8, spd - trim]
         for msg in (msg1, msg2):
             _ = spi.xfer(msg)
-            time.sleep(spi_wait)
+            time.sleep(SPI_WAIT)
 
     def go_FL(self, spd, trim=None):
         """Drive diagonally forward + left at speed = spd
@@ -225,7 +225,7 @@ class OmniCar():
         msg2 = [3+8, spd - trim]
         for msg in (msg1, msg2):
             _ = spi.xfer(msg)
-            time.sleep(spi_wait)
+            time.sleep(SPI_WAIT)
 
     def go_BL(self, spd, trim=None):
         """Drive diagonally back + left at speed = spd
@@ -237,7 +237,7 @@ class OmniCar():
         msg2 = [2, spd + trim]
         for msg in (msg1, msg2):
             _ = spi.xfer(msg)
-            time.sleep(spi_wait)
+            time.sleep(SPI_WAIT)
 
     def go_BR(self, spd, trim=None):
         """Drive diagonally back + right at speed = spd
@@ -249,7 +249,7 @@ class OmniCar():
         msg2 = [3, spd + trim]
         for msg in (msg1, msg2):
             _ = spi.xfer(msg)
-            time.sleep(spi_wait)
+            time.sleep(SPI_WAIT)
 
     def read_dist(self):
         """
