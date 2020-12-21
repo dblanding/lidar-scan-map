@@ -7,13 +7,14 @@ import math
 import matplotlib.pyplot as plt
 from matplotlib import style
 import os
+import pickle
 from pprint import pprint
 
 style.use('fivethirtyeight')
 
 # detection level thesholds
-GAP = 6  # keep this value small to only see things that are close
-CORNER = 3
+GAP = 5  # keep this value small to only see things that are close
+CORNER = 5
 END_HOOK_LIMIT = 2  # max distance between end point and 'inner' base line
 
 # global values
@@ -276,7 +277,7 @@ def analyze_data(data, start=10000, end=30000):
 
     return start_idx, end_idx, length, angle, x_value
 
-def show_map(data, map_folder, nmbr=None):
+def show_map(data, map_folder="Maps", nmbr=None, show=False):
     # We need to start with a "clean slate"
     global points
     points = []
@@ -317,5 +318,7 @@ def show_map(data, map_folder, nmbr=None):
 
     plt.axis('equal')
     plt.savefig(imagefile)
+    if show:
+        plt.show()  # shows interactive plot
     plt.clf()  # clears previous points & lines
-    #plt.show()  # shows interactive plot
+    

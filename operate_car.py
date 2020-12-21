@@ -10,9 +10,9 @@ car = omnicar.OmniCar()
 
 PAUSE = 0.05  # sec PAUSE time needed between wheel motor commands
 MIN_LENGTH = 20  # threshold min length to end of wall
-MIN_DIST = 30  # threshold min distance from car to wall
+MIN_DIST = 40  # threshold min distance from car to wall
 KP = 0.5  # steering proportional PID coefficient
-KD = 0.4  # steering derivative PID coefficient
+KD = 0.6  # steering derivative PID coefficient
 SPD = 100  # default car speed
 
 def jog_FR(spd, t, trim=5):
@@ -161,7 +161,6 @@ def drive_and_scan(spd=SPD):
     While driving, adjust steering trim to minimize angle error.
     """
     data_list = []  # list of data from multiple scans
-    target = 90  # angle (degrees)
 
     # Before driving along wall, move the car sideways until it is
     # at least the minimum desired distance from the wall at left.
@@ -192,7 +191,12 @@ def drive_and_scan(spd=SPD):
     print("Wheels Stopped")
     print()
 
-    prev_angle = angle
+    # Set up to drive parallel to wall (wall angle should be 90 degrees)
+    turn(angle - 90)
+    steer_target = car.heading()
+    print(f"target heading = {steer_target}")
+    prev_error = 0
+
     trim = 3  # estimate of correct steering trim
     time.sleep(PAUSE)
     if length > MIN_LENGTH:  # drive along wall
@@ -211,12 +215,15 @@ def drive_and_scan(spd=SPD):
         print(f"length: {length}")
         print(f"angle: {angle}")
         print(f"x_dist: {x_dist}")
+        heading = car.heading()
+        print(f"heading: {heading}")
         print()
-        # Adjust trim as needed to keep car driving along left wall
-        # This means keep angle equal to target using pid feedback
-        p_term = angle - target
-        d_term = angle - prev_angle
-        prev_angle = angle
+        # Adjust trim to keep car heading matched to steer_target
+        # Use pid feedback loop
+        error = heading - steer_target
+        p_term = error
+        d_term = error - prev_error
+        prev_error = error
         adjustment = int((p_term * KP + d_term * KD))
         trim += adjustment
         print(f"p_term = {p_term}, d_term = {d_term}, trim = {trim}")
@@ -309,19 +316,5 @@ def turn(angle):
 
 if __name__ == "__main__":
 
-    turn_to(350)
-    print(f"car heading: {car.heading()}")
-    '''
-    nmbr_of_loops = 1
-    while nmbr_of_loops:
-        drive_and_scan()
-        print("Turning 45 degrees CCW")
-        jog_ccw(100, 1.1)  # roughly 45 degrees
-        cross_corner_scan()
-        print("Turning 45 degrees CCW")
-        jog_ccw(100, 1.1)  # roughly 45 degrees
-        nmbr_of_loops -= 1
-
-    remap_scans()
-    '''
+    drive_and_scan()
     car.close()
