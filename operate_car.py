@@ -272,9 +272,47 @@ def cross_corner_scan():
     with open('corner_data.pkl', 'wb') as f:
         pickle.dump(data_list, f)
 
+def rel_bearing(target):
+    delta = target - 180
+    rel_brng = car.heading() - delta
+    if rel_brng < 0:
+        rel_brng += 360
+    return rel_brng
+
+def turn_to(target):
+    """Turn to target heading."""
+    # avoid 360 / 0 transition
+    # adjust heading and target as if aiming for 180
+    rel_heading = rel_bearing(target)
+    if rel_heading > 180:
+        car.spin_ccw(80)
+        while rel_heading > 180:
+            print(f"relative heading: {rel_heading}")
+            rel_heading = rel_bearing(target)
+            time.sleep(0.1)
+    elif rel_heading < 180:
+        car.spin_cw(80)
+        while rel_heading > 180:
+            print(f"relative heading: {rel_heading}")
+            rel_heading = rel_bearing(target)
+            time.sleep(0.1)
+    car.stop_wheels()
+
+def turn(angle):
+    """Spin car angle degrees (+ is CCW)."""
+
+    start_heading = car.heading()
+    end_heading = start_heading - angle
+    if end_heading < 0:
+        end_heading += 360
+    turn_to(end_heading)
+
 
 if __name__ == "__main__":
 
+    turn_to(0)
+    print(f"car heading: {car.heading()}")
+    '''
     nmbr_of_loops = 1
     while nmbr_of_loops:
         drive_and_scan()
@@ -286,4 +324,5 @@ if __name__ == "__main__":
         nmbr_of_loops -= 1
 
     remap_scans()
+    '''
     car.close()

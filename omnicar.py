@@ -1,9 +1,9 @@
 """This program accesses all the functions of the omni wheel car.
 
-  * Motor drive by command to the Arduino (then through motor shield)
-  * Access TFminiPlus data through serial bus
-  * Access to rotary angle encoder (through ADC on I2C bus)
-  * Access to compass heading through HMC5883L device
+  * Motor drive by command to the Arduino through SPI bus
+  * Access TFminiPlus data through serial port
+  * Access to rotary angle encoder through ADC on I2C bus
+  * Access to compass heading through HMC5883L on I2C bus
 
 The TFminiPlus uses the RasPi's only serial bus for data transfer.
 Communication between the Arduino and the Adafruit motor shield (v2.3)
@@ -38,7 +38,9 @@ spi.max_speed_hz = 500000  # Set SPI speed and mode
 spi.mode = 0
 spi_wait = .006  # wait time (sec) between successive spi commands
 
-# some HMC5883L Registers and their Address
+i2cbus = smbus.SMBus(1)
+HMC5883_ADDRESS = 0x1e   # 0x3c >> 1
+# HMC5883L Registers and their Address
 Register_A     = 0x00  # Address of Configuration register A
 Register_B     = 0x01  # Address of configuration register B
 Register_mode  = 0x02  # Address of mode register
@@ -46,20 +48,15 @@ X_axis_H = 0x03  # Address of X-axis MSB data register
 Z_axis_H = 0x05  # Address of Z-axis MSB data register
 Y_axis_H = 0x07  # Address of Y-axis MSB data register
 
-i2cbus = smbus.SMBus(1)
-HMC5883_ADDRESS = 0x1e   # 0x3c >> 1
-
 
 class OmniCar():
     """
-    class OmniCar: Access all functions of omni-wheel car.
+    Access all functions of omni-wheel car.
     """
 
     def __init__(self):
-        """
-        Constructor for omni-wheel car.
-        Store distance as attribute.
-        """
+        """Configure HMC5883L, store most recent lidar distance."""
+
         self.distance = 0  # distance (cm) of last measured LiDAR value
 
         # write to Configuration Register A
@@ -70,12 +67,13 @@ class OmniCar():
         # Use default gain
         i2cbus.write_byte_data(HMC5883_ADDRESS, Register_B, 0x20)
 
-        # Write to mode Register for selecting mode
-        # 0x01 (single meas mode) is default
-        # 0x00 (continuous meas mode)
+        # Write to mode Register to specify mode
+        # 0x01 (single measurement mode) is default
+        # 0x00 (continuous measurenent mode)
         i2cbus.write_byte_data(HMC5883_ADDRESS, Register_mode, 0x00)
 
     def read_raw_data(self, addr):
+        """Read from HMC5883L data registers"""
 
         # Read raw 16-bit value
         high = i2cbus.read_byte_data(HMC5883_ADDRESS, addr)
@@ -90,12 +88,13 @@ class OmniCar():
         return value
 
     def heading(self):
+        """Return magnetic compass heading of car (degrees)."""
 
         # Read Accelerometer raw value
         x = self.read_raw_data(X_axis_H)
         z = self.read_raw_data(Z_axis_H)
         y = self.read_raw_data(Y_axis_H)
-        print(x, y, z)
+        # print(x, y, z)
         # working in radians...
         heading = math.atan2(y, x)
 
