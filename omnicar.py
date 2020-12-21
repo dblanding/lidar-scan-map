@@ -2,7 +2,8 @@
 
   * Motor drive by command to the Arduino (then through motor shield)
   * Access TFminiPlus data through serial bus
-  * Access to rotary angle encoder (through ADC)
+  * Access to rotary angle encoder (through ADC on I2C bus)
+  * Access to compass heading through HMC5883L device
 
 The TFminiPlus uses the RasPi's only serial bus for data transfer.
 Communication between the Arduino and the Adafruit motor shield (v2.3)
@@ -18,7 +19,9 @@ See omni-wheels.md for an explanation of wheel motor drive.
 """
 
 import Adafruit_ADS1x15
+import math
 import serial
+import smbus
 import spidev
 import time
 
@@ -28,12 +31,23 @@ GAIN = 1  #ADC gain
 ser = serial.Serial("/dev/ttyS0", 115200)
 
 spi = spidev.SpiDev()  # Enable SPI
-bus = 0  # We only have SPI bus 0 available to us on the Pi
+spibus = 0  # We only have SPI bus 0 available to us on the Pi
 device = 0  # Device is the chip select pin. Set to 0 or 1
-spi.open(bus, device)  # Open a connection
+spi.open(spibus, device)  # Open a connection
 spi.max_speed_hz = 500000  # Set SPI speed and mode
 spi.mode = 0
 spi_wait = .006  # wait time (sec) between successive spi commands
+
+# some HMC5883L Registers and their Address
+Register_A     = 0x00  # Address of Configuration register A
+Register_B     = 0x01  # Address of configuration register B
+Register_mode  = 0x02  # Address of mode register
+X_axis_H = 0x03  # Address of X-axis MSB data register
+Z_axis_H = 0x05  # Address of Z-axis MSB data register
+Y_axis_H = 0x07  # Address of Y-axis MSB data register
+
+i2cbus = smbus.SMBus(1)
+HMC5883_ADDRESS = 0x1e   # 0x3c >> 1
 
 
 class OmniCar():
@@ -47,6 +61,55 @@ class OmniCar():
         Store distance as attribute.
         """
         self.distance = 0  # distance (cm) of last measured LiDAR value
+
+        # write to Configuration Register A
+        # average 8 samples per measurement output
+        i2cbus.write_byte_data(HMC5883_ADDRESS, Register_A, 0x70)
+
+        # Write to Configuration Register B for gain
+        # Use default gain
+        i2cbus.write_byte_data(HMC5883_ADDRESS, Register_B, 0x20)
+
+        # Write to mode Register for selecting mode
+        # 0x01 (single meas mode) is default
+        # 0x00 (continuous meas mode)
+        i2cbus.write_byte_data(HMC5883_ADDRESS, Register_mode, 0x00)
+
+    def read_raw_data(self, addr):
+
+        # Read raw 16-bit value
+        high = i2cbus.read_byte_data(HMC5883_ADDRESS, addr)
+        low = i2cbus.read_byte_data(HMC5883_ADDRESS, addr+1)
+
+        # concatenate higher and lower value
+        value = ((high << 8) | low)
+
+        # to get signed value from module
+        if(value > 32768):
+            value = value - 65536
+        return value
+
+    def heading(self):
+
+        # Read Accelerometer raw value
+        x = self.read_raw_data(X_axis_H)
+        z = self.read_raw_data(Z_axis_H)
+        y = self.read_raw_data(Y_axis_H)
+        print(x, y, z)
+        # working in radians...
+        heading = math.atan2(y, x)
+
+        heading = heading + .44 * math.cos((heading + .175)) + .0175
+        heading = heading - math.pi / 2
+
+        # check for sign
+        if(heading < 0):
+            heading += 2 * math.pi
+
+        # convert into angle
+        heading_angle = int(heading * 180 / math.pi)
+
+        return heading_angle
 
     def run_mtr(self, mtr, spd, rev=False):
         """
@@ -251,3 +314,10 @@ class OmniCar():
     def close(self):
         spi.close()
         ser.close()
+        i2cbus.close()
+
+if __name__ == "__main__":
+    car = OmniCar()
+    while True:
+        print(car.heading())
+        time.sleep(1)
