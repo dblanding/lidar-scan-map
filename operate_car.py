@@ -5,6 +5,8 @@ import pickle
 import time
 import map_scan_data
 import omnicar
+import proscan
+from pprint import pprint
 
 car = omnicar.OmniCar()
 
@@ -316,5 +318,14 @@ def turn(angle):
 
 if __name__ == "__main__":
 
-    drive_and_scan()
+    # drive_and_scan()
+    data = car.scan()
+    pscan = proscan.ProcessScan(data)
+    print(pscan.regions)
+    print()
+    pscan.map()
+    
+    lines = pscan.get_lines()
+    # get length, angle and (perpendicular) distance for each line
+    pprint(lines)
     car.close()

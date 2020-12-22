@@ -58,7 +58,7 @@ def read_raw_data(addr):
     # concatenate higher and lower value
     value = ((high << 8) | low)
 
-    # to get signed value from module
+    # get signed value from module
     if value > 32768:
         value = value - 65536
     return value
