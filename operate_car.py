@@ -1,9 +1,9 @@
 """Collection of car operation commands
 """
 
+import math
 import pickle
 import time
-import map_scan_data
 import omnicar
 import proscan
 from pprint import pprint
@@ -109,7 +109,7 @@ def scan_series(nbr, lev=10000, hev=30000):
     """
     data_list = []  # list of scan data from multiple scans
     while nbr:
-        scan_data = car.scan(low_enc_val=lev, hi_enc_val=hev)
+        scan_data = car.scan(lev=lev, hev=hev)
         print(scan_data[0])
         print("Number of data points: ", len(scan_data))
         scan_data.pop(0)  # may have 'stale' serial data
@@ -166,7 +166,7 @@ def drive_and_scan(spd=SPD):
 
     # Before driving along wall, move the car sideways until it is
     # at least the minimum desired distance from the wall at left.
-    scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
+    scan_data = car.scan(lev=10000, hev=20000)
     data_list.append(scan_data)
     start_idx, end_idx, length, angle, x_dist = map_scan_data.analyze_data(scan_data)
     threshold_idx = (start_idx + end_idx) / 2
@@ -180,7 +180,7 @@ def drive_and_scan(spd=SPD):
         print("Driving away from wall")
         print()
         while abs(x_dist) < MIN_DIST:  # move farther from wall
-            scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
+            scan_data = car.scan(lev=10000, hev=20000)
             data_list.append(scan_data)
             start_idx, end_idx, length, angle, x_dist = map_scan_data.analyze_data(scan_data)
             threshold_idx = (start_idx + end_idx) / 2
@@ -207,7 +207,7 @@ def drive_and_scan(spd=SPD):
         print("Driving along wall")
         print()
     while length > MIN_LENGTH:  # continue while steering
-        scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
+        scan_data = car.scan(lev=10000, hev=20000)
         data_list.append(scan_data)
         start_idx, end_idx, length, angle, x_dist = map_scan_data.analyze_data(scan_data)
         if start_idx > threshold_idx:
@@ -248,7 +248,7 @@ def cross_corner_scan(spd=SPD):
     """
     data_list = []  # list of data from multiple scans
 
-    scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
+    scan_data = car.scan(lev=10000, hev=20000)
     data_list.append(scan_data)
     strt_idx, end_idx, length, angle, x_dist = map_scan_data.analyze_data(scan_data)
     print(f"length: {length}")
@@ -262,9 +262,9 @@ def cross_corner_scan(spd=SPD):
     xtra_loops = 2  # number of extra times to go through loop below
     more = 0  # flag to go through loop below more times
     while angle < 90 or more < xtra_loops:
-        scan_data = car.scan(low_enc_val=10000, hi_enc_val=20000)
+        scan_data = car.scan(lev=10000, hev=20000)
         data_list.append(scan_data)
-        strt_idx, end_idx, length, angle, x_dist = map_scan_data.analyze_data(scan_data)
+        lev_idx, end_idx, length, angle, x_dist = map_scan_data.analyze_data(scan_data)
         print(f"length: {length}")
         print(f"angle: {angle}")
         print(f"x_dist: {x_dist}")
@@ -315,24 +315,49 @@ def turn(angle):
         end_heading += 360
     turn_to(end_heading)
 
+def r2p(xy_coords):
+    """Convert rect coords (x, y) to polar (r, theta)
+    with theta in degrees."""
+    x, y = xy_coords
+    r = math.sqrt(x*x + y*y)
+    theta = math.atan2(y, x) * 180 / math.pi
+    return (r, theta)
 
-if __name__ == "__main__":
-
-    # drive_and_scan()
-    data = car.scan()
-    pscan = proscan.ProcessScan(data)
-    print(pscan.regions)
-    print()
-    pscan.map()
-    
-    # get 'CLAD' (coords, length, angle and dist) parameters for lines
-    line_parameters = pscan.get_line_parameters()
+def print_line_params(line_params):
     for item in line_parameters:
         coords, length, angle, distance = item
-        print(f"coords: {coords}")
+        p1_xy_coords, p2_xy_coords = coords
+        p1_rp_coords = r2p(p1_xy_coords)
+        p2_rp_coords = r2p(p2_xy_coords)
+        print(f"P1 rect coords: ({int(p1_xy_coords[0])}, {int(p1_xy_coords[1])})")
+        print(f"P2 rect coords: ({int(p2_xy_coords[0])}, {int(p2_xy_coords[1])})")
+        print(f"P1 polar coords: ({int(p1_rp_coords[0])}, {p1_rp_coords[1]:.2f})")
+        print(f"P2 polar coords: ({int(p2_rp_coords[0])}, {p2_rp_coords[1]:.2f})")
         print(f"length: {length}")
         print(f"angle: {angle}")
         print(f"distance: {distance}")
         print()
+
+def approach_to_dist(dist):
+    data = car.scan()
+    pscan = proscan.ProcessScan(data)
+    pscan.map
+    line_params = pscan.get_line_parameters()
+
+
+if __name__ == "__main__":
+
+    # drive_and_scan()
+    # data = car.scan(lev=16000, hev=24000)
+    data = car.scan()
+    #pscan = proscan.ProcessScan(data, lev=15000, end=25000)
+    pscan = proscan.ProcessScan(data)
+    print(pscan.regions)
+    print()
+    pscan.map()
+
+    # get 'CLAD' (coords, length, angle and dist) parameters for lines
+    line_parameters = pscan.get_line_parameters()
+    print_line_params(line_parameters)
 
     car.close()

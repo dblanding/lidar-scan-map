@@ -2,8 +2,6 @@
 import math
 import matplotlib.pyplot as plt
 from matplotlib import style
-import os
-import pickle
 
 style.use('fivethirtyeight')
 
@@ -57,6 +55,13 @@ class Point():
         self.theta = theta  # (derived) float angle wrt car (radians)
         self.xy = xy  # (x, y) coordinates
 
+# Default values used in ProcessScan
+LEV = 10000  # Start of sector (Low Encoder Value)
+HEV = 30000  # End of sector (High Encoder Value)
+GAP = 7
+CORNER = 7
+HOOK = 2
+
 
 class ProcessScan():
     """
@@ -64,15 +69,38 @@ class ProcessScan():
     Plot points and/or lines. Display and/or save plot image.
     """
 
-    def __init__(self, scandata, gap=7, crnr=5, hook=2):
-        """Generate list of points from scandata."""
-        self.GAP = gap
-        self.CORNER = crnr
-        self.END_HOOK_LIMIT = hook
+    def __init__(self, data, lev=None, hev=None, gap=None, crnr=None, hook=None):
+        """Generate list of Point objects from (scan) data.
+        Optionally specify: sector of interest
+        from lev (low encoder value) to hev (high encoder value),
+        gap (threshold of discontinuity of adjacent points),
+        crnr (threshold to detect a corner in a region of continuous points),
+        hook (to trigger rejection of end points hooked off main line).
+        """
+        if lev:
+            self.LEV = lev
+        else:
+            self.LEV = LEV
+        if hev:
+            self.HEV = hev
+        else:
+            self.HEV = HEV
+        if gap:
+            self.GAP = gap
+        else:
+            self.GAP = GAP
+        if crnr:
+            self.CORNER = crnr
+        else:
+            self.CORNER = CORNER
+        if hook:
+            self.END_HOOK_LIMIT = hook
+        else:
+            self.END_HOOK_LIMIT = HOOK
         self.points = []
         self.regions = []
         self.segments = []
-        self._generate_points(scandata)
+        self._generate_points(data)
         self._generate_regions()
 
     def _generate_points(self, data):
@@ -109,11 +137,7 @@ class ProcessScan():
             y = pnt.dist * math.sin(pnt.theta)
             pnt.xy = (x, y)
 
-    def _generate_regions(self, strt=None, end=None):
-        if not strt:
-            strt = 10000
-        if not end:
-            end = 30000
+    def _generate_regions(self):
         """Find continuous regions of closely spaced points (clumps)
         Large gaps (dist to neighbor > gap) represent 'edges' of regions.
         Record index of the start & end points of each region.
@@ -123,10 +147,12 @@ class ProcessScan():
         start_index = 0
         dist = 0
         for n, pnt in enumerate(self.points):
-            if pnt.enc_val < strt:
+            if pnt.enc_val < self.LEV:
                 start_index = n
-            elif strt <= pnt.enc_val <= end:
+            elif self.LEV <= pnt.enc_val <= self.HEV:
                 dist = p2p_dist(pnt.xy, self.points[n-1].xy)
+            elif pnt.enc_val > self.HEV:
+                break
             if dist > self.GAP:
                 if n > (start_index + 1):
                     regions.append((start_index, n-1))
@@ -147,7 +173,7 @@ class ProcessScan():
 
         # Remove hooked ends from segments Todo: get this working better
         # self._remove_hooks()
-        
+
     def _cull_regions(self):
         """Kind of like linting for regions..."""
 
@@ -222,8 +248,7 @@ class ProcessScan():
             first_point = self.points[start_idx].xy
             last_point = self.points[end_idx].xy
             # find 'inner' base line points with first & last points removed
-            pt1, pt2  = (self.points[start_idx + 1].xy,
-                         self.points[end_idx -1].xy)
+            pt1, pt2 = (self.points[start_idx + 1].xy, self.points[end_idx -1].xy)
             line = cnvrt_2pts_to_coef(pt1, pt2)
             if p2line_dist(first_point, line) > self.END_HOOK_LIMIT:
                 start_idx += 2
@@ -256,11 +281,11 @@ class ProcessScan():
         """
         indexes = []
         for region in self.regions:
-            indexes.extend([idx for idx in range(region[0], region[-1]+1)])
+            indexes.extend(range(region[0], region[-1]+1))
         return indexes
 
     def map(self, map_folder="Maps", nmbr=None, show=True):
-        
+
         filename = f"{map_folder}/scanMap"
         if nmbr:
             imagefile = filename + str(nmbr) + ".png"
@@ -298,4 +323,3 @@ class ProcessScan():
         if show:
             plt.show()  # shows interactive plot
         plt.clf()  # clears previous points & lines
-        

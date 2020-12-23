@@ -281,9 +281,9 @@ class OmniCar():
         """Turn scan motor off."""
         self.run_mtr(7, 0)
 
-    def scan(self, low_enc_val=10000, hi_enc_val=30000):
+    def scan(self, lev=10000, hev=30000):
         """Return list of tuples of scan data for encoder values between
-        low_enc_val and hi_enc_val.
+        lev (low encoder value) and hev (high encoder value).
         """
         enc_val = self.get_enc_val()
         # If scan rotor isn't near BDC (back dead cntr), go to BDC
@@ -300,7 +300,7 @@ class OmniCar():
         data = []
         while enc_val < 32767:  # continue as values increase to max
             enc_val = self.get_enc_val()
-            if low_enc_val < enc_val < hi_enc_val:  # 20000 is 'straight ahead'
+            if lev < enc_val < hev:  # 20000 is 'straight ahead'
                 counter = self.read_dist()
                 now = time.time()
                 delta_t = str(now - last_time)
