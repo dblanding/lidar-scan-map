@@ -325,7 +325,14 @@ if __name__ == "__main__":
     print()
     pscan.map()
     
-    lines = pscan.get_lines()
-    # get length, angle and (perpendicular) distance for each line
-    pprint(lines)
+    # get 'CLAD' (coords, length, angle and dist) parameters for lines
+    line_parameters = pscan.get_line_parameters()
+    for item in line_parameters:
+        coords, length, angle, distance = item
+        print(f"coords: {coords}")
+        print(f"length: {length}")
+        print(f"angle: {angle}")
+        print(f"distance: {distance}")
+        print()
+
     car.close()

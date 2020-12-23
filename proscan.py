@@ -221,27 +221,34 @@ class ProcessScan():
             end_idx = region[-1]
             first_point = self.points[start_idx].xy
             last_point = self.points[end_idx].xy
-            # find 'inner' base line points with first 2 & last 2 points removed
-            pt1, pt2  = (self.points[start_idx + 2].xy,
-                         self.points[end_idx -2].xy)
+            # find 'inner' base line points with first & last points removed
+            pt1, pt2  = (self.points[start_idx + 1].xy,
+                         self.points[end_idx -1].xy)
             line = cnvrt_2pts_to_coef(pt1, pt2)
             if p2line_dist(first_point, line) > self.END_HOOK_LIMIT:
                 start_idx += 2
-                print("Removed pair of points at start of line")
+                print("Removed a point at start of line")
             if p2line_dist(last_point, line) > self.END_HOOK_LIMIT:
                 end_idx -= 2
-                print("Removed pair of points at end of line")
+                print("Removed a point at end of line")
             self.regions[n] = (start_idx, end_idx)
 
-    def get_lines(self):
-        """Return list of best fit lines defined by each region."""
+    def get_line_parameters(self):
+        """Return a list of tuples, each tuple containing the parameters
+        of the line which best fits each region in self.regions.
+        acronym: 'clad' for (coords, length, angle, distance)."""
         linelist = []
         for region in self.regions:
             start_idx = region[0]
             end_idx = region[1]
             start_coords = self.points[start_idx].xy
             end_coords = self.points[end_idx].xy
-            linelist.append((start_coords, end_coords))
+            line = cnvrt_2pts_to_coef(start_coords, end_coords)
+            coords = (start_coords, end_coords)
+            length = p2p_dist(start_coords, end_coords)
+            angle = p2p_angle(start_coords, end_coords)
+            dist = p2line_dist((0, 0), line)  # perp distance to line
+            linelist.append((coords, length, angle, dist))
         return linelist
 
     def indexes_in_regions(self):
