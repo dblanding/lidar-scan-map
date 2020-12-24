@@ -1,20 +1,26 @@
 """Collection of car operation commands
 """
-
+import logging
 import math
 import pickle
+import sys
 import time
 import omnicar
 import proscan
 from pprint import pprint
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.addHandler(logging.StreamHandler(sys.stdout))
+
 car = omnicar.OmniCar()
 
 PAUSE = 0.05  # sec PAUSE time needed between wheel motor commands
+CLEARANCE = 60  # threshold min clearance to wall
 MIN_LENGTH = 20  # threshold min length to end of wall
 MIN_DIST = 40  # threshold min distance from car to wall
-KP = 0.5  # steering proportional PID coefficient
-KD = 0.6  # steering derivative PID coefficient
+KP = 0.5  # steering PID proportional coefficient
+KD = 0.6  # steering PID derivative coefficient
 CARSPEED = 100  # default car speed
 
 def jog_FR(spd, t, trim=5):
@@ -110,11 +116,11 @@ def scan_series(nbr, lev=10000, hev=30000):
     data_list = []  # list of scan data from multiple scans
     while nbr:
         scan_data = car.scan(lev=lev, hev=hev)
-        print(scan_data[0])
-        print("Number of data points: ", len(scan_data))
+        logger.debug(scan_data[0])
+        logger.debug("Number of data points: ", len(scan_data))
         scan_data.pop(0)  # may have 'stale' serial data
-        print(scan_data[0])
-        print("Number of data points: ", len(scan_data))
+        logger.debug(scan_data[0])
+        logger.debug("Number of data points: ", len(scan_data))
         data_list.append(scan_data)
         nbr -= 1
         if nbr:
@@ -129,8 +135,8 @@ def scan_series(nbr, lev=10000, hev=30000):
 
     # map the scans
     for n, scan_data in enumerate(data_list):
-        print()
-        print(f"Scan number {n+1} of {len(data_list)}")
+        logger.debug()
+        logger.debug(f"Scan number {n+1} of {len(data_list)}")
         map_scan_data.show_map(scan_data, n+1)
 
 def remap_scans():
@@ -148,8 +154,8 @@ def remap_scans():
             data_list = pickle.load(f)
 
         for n, scan_data in enumerate(data_list):
-            print()
-            print(f"Scan number {n+1} of {len(data_list)}")
+            logger.debug()
+            logger.debug(f"Scan number {n+1} of {len(data_list)}")
             map_scan_data.show_map(scan_data, map_folder, n+1)
 
 def drive_and_scan(spd=CARSPEED):
@@ -296,13 +302,13 @@ def turn_to(target):
     if rel_heading > 180:
         car.spin_ccw(80)
         while rel_heading > 180:
-            print(f"relative heading: {rel_heading}")
+            logger.debug(f"relative heading: {rel_heading}")
             rel_heading = rel_bearing(target)
             time.sleep(0.1)
     elif rel_heading < 180:
         car.spin_cw(80)
         while rel_heading < 180:
-            print(f"relative heading: {rel_heading}")
+            logger.debug(f"relative heading: {rel_heading}")
             rel_heading = rel_bearing(target)
             time.sleep(0.1)
     car.stop_wheels()
@@ -349,9 +355,9 @@ def approach_wall(carspeed, clearance):
     # Examine first line found
     coords, length, angle, dist = line_params[0]
     pscan.map(display_all_points=True)
-    print("Approaching wall")
-    print(f"Dist = {int(dist)}")
-    print(f"Angle = {angle:.2f}")
+    logger.debug("Approaching wall")
+    logger.debug(f"Dist = {int(dist)}")
+    logger.debug(f"Angle = {angle:.2f}")
     target_angle = 0
     if length > clearance:
         car.go_F(carspeed)
@@ -366,9 +372,9 @@ def approach_wall(carspeed, clearance):
 
         # Examine first line found
         coords, length, angle, dist = line_params[0]
-        print()
-        print(f"Dist = {int(dist)} cm")
-        print(f"Angle = {angle:.2f} deg")
+        logger.info('')
+        logger.info(f"Dist = {int(dist)} cm")
+        logger.info(f"Angle = {angle:.2f} deg")
         # Adjust trim to maintain angle=target using pid feedback loop
         error = angle - target_angle
         p_term = error
@@ -376,7 +382,7 @@ def approach_wall(carspeed, clearance):
         prev_error = error
         adjustment = int((p_term * KP + d_term * KD))
         trim += adjustment
-        print(f"p_term = {p_term:.2f}, d_term = {d_term:.2f}, trim = {trim}")
+        logger.debug(f"p_term = {p_term:.2f}, d_term = {d_term:.2f}, trim = {trim}")
         car.go_F(carspeed, trim=trim)
 
     car.stop_wheels()
@@ -384,6 +390,6 @@ def approach_wall(carspeed, clearance):
 
 if __name__ == "__main__":
 
-    approach_wall(CARSPEED, 50)
+    approach_wall(CARSPEED, CLEARANCE)
 
     car.close()

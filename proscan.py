@@ -1,7 +1,10 @@
-
+import logging
 import math
 import matplotlib.pyplot as plt
 from matplotlib import style
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 
 style.use('fivethirtyeight')
 
@@ -168,8 +171,8 @@ class ProcessScan():
         pass_nr = 0
         while self._find_corners():
             pass_nr += 1
-            print(f"Looking for corners, pass {pass_nr}")
-            print(f"Regions: {self.regions}")
+            logger.debug(f"Looking for corners, pass {pass_nr}")
+            logger.debug(f"Regions: {self.regions}")
 
         # Remove hooked ends from segments Todo: get this working better
         # self._remove_hooks()
@@ -182,7 +185,7 @@ class ProcessScan():
         for region in self.regions:
             if (region[-1] - region[0]) < 4:
                 to_remove.append(region)
-        print(f"Removed {len(to_remove)} tiny regions")
+        logger.debug(f"Removed {len(to_remove)} tiny regions")
         for region in to_remove:
             self.regions.remove(region)
 
@@ -190,7 +193,7 @@ class ProcessScan():
         for region in self.regions:
             if region[0] == region[-1]:
                 self.regions.remove(region)
-                print("Removed a region with only 1 point")
+                logger.debug("Removed a region with only 1 point")
 
     def _find_corners(self):
         """
@@ -252,10 +255,10 @@ class ProcessScan():
             line = cnvrt_2pts_to_coef(pt1, pt2)
             if p2line_dist(first_point, line) > self.END_HOOK_LIMIT:
                 start_idx += 2
-                print("Removed a point at start of line")
+                logger.debug("Removed a point at start of line")
             if p2line_dist(last_point, line) > self.END_HOOK_LIMIT:
                 end_idx -= 2
-                print("Removed a point at end of line")
+                logger.debug("Removed a point at end of line")
             self.regions[n] = (start_idx, end_idx)
 
     def get_line_parameters(self):
@@ -320,7 +323,7 @@ class ProcessScan():
             y_vals = [pnt1[1], pnt2[1]]
             line_coords.append((pnt1, pnt2))
             plt.plot(x_vals, y_vals)
-        # print(line_coords)
+        logger.debug(line_coords)
 
         plt.axis('equal')
         plt.savefig(imagefile)
