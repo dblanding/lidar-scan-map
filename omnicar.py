@@ -271,30 +271,29 @@ class OmniCar():
         """Return encoder value from LiDAR rotor angular encoder."""
         return adc.read_adc(0, gain=GAIN, data_rate=250)
 
-    def scan_mtr_start(self, spd=None):
+    def scan_mtr_start(self, spd):
         """Turn scan motor on at speed = spd (int between 0-255)."""
-        if not spd:
-            spd = 200  # default value
         self.run_mtr(7, spd)
 
     def scan_mtr_stop(self):
         """Turn scan motor off."""
         self.run_mtr(7, 0)
 
-    def scan(self, lev=10000, hev=30000):
-        """Return list of tuples of scan data for encoder values between
-        lev (low encoder value) and hev (high encoder value).
+    def scan(self, spd=200, lev=10000, hev=30000):
+        """Run scan mtr at spd (100-255) and return list of tuples of
+        scan data for encoder values between lev (low encoder value) and
+        hev (high encoder value).
         """
         enc_val = self.get_enc_val()
         # If scan rotor isn't near BDC (back dead cntr), go to BDC
         if enc_val > 3000:
-            self.scan_mtr_start()
+            self.scan_mtr_start(spd)
             while enc_val < 32767:  # continue as values increase to max
                 enc_val = self.get_enc_val()
             while enc_val == 32767:  # continue to back dead cntr
                 enc_val = self.get_enc_val()
         else:
-            self.scan_mtr_start()
+            self.scan_mtr_start(spd)
             enc_val = self.get_enc_val()
         last_time = time.time()
         data = []

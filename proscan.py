@@ -58,7 +58,7 @@ class Point():
 # Default values used in ProcessScan
 LEV = 10000  # Start of sector (Low Encoder Value)
 HEV = 30000  # End of sector (High Encoder Value)
-GAP = 7
+GAP = 8
 CORNER = 7
 HOOK = 2
 
@@ -284,7 +284,8 @@ class ProcessScan():
             indexes.extend(range(region[0], region[-1]+1))
         return indexes
 
-    def map(self, map_folder="Maps", nmbr=None, show=True):
+    def map(self, map_folder="Maps", nmbr=None, show=True,
+            display_all_points=False):
 
         filename = f"{map_folder}/scanMap"
         if nmbr:
@@ -295,8 +296,11 @@ class ProcessScan():
         # build data lists to plot data points
         xs = []
         ys = []
-        pnts_to_plot = [pnt for idx, pnt in enumerate(self.points)
-                        if idx in self.indexes_in_regions()]
+        if display_all_points:
+            pnts_to_plot = self.points
+        else:
+            pnts_to_plot = [pnt for idx, pnt in enumerate(self.points)
+                            if idx in self.indexes_in_regions()]
         for pnt in pnts_to_plot:
             x, y = pnt.xy
             xs.append(x)

@@ -15,7 +15,7 @@ MIN_LENGTH = 20  # threshold min length to end of wall
 MIN_DIST = 40  # threshold min distance from car to wall
 KP = 0.5  # steering proportional PID coefficient
 KD = 0.6  # steering derivative PID coefficient
-SPD = 100  # default car speed
+CARSPEED = 100  # default car speed
 
 def jog_FR(spd, t, trim=5):
     """Jog diagonally forward + right at spd (int 0-255) for t seconds
@@ -152,7 +152,7 @@ def remap_scans():
             print(f"Scan number {n+1} of {len(data_list)}")
             map_scan_data.show_map(scan_data, map_folder, n+1)
 
-def drive_and_scan(spd=SPD):
+def drive_and_scan(spd=CARSPEED):
     """
     Drive parallel to wall on left keeping track of its parameters:
         length: distance from projection of car to the end of wall.
@@ -239,7 +239,7 @@ def drive_and_scan(spd=SPD):
     with open('scan_data.pkl', 'wb') as f:
         pickle.dump(data_list, f)
 
-def cross_corner_scan(spd=SPD):
+def cross_corner_scan(spd=CARSPEED):
     """
     Traverse corner from the end of one wall to the start of the next:
         drive forward while scanning
@@ -324,40 +324,66 @@ def r2p(xy_coords):
     return (r, theta)
 
 def print_line_params(line_params):
-    for item in line_parameters:
+    for item in line_params:
         coords, length, angle, distance = item
         p1_xy_coords, p2_xy_coords = coords
         p1_rp_coords = r2p(p1_xy_coords)
         p2_rp_coords = r2p(p2_xy_coords)
-        print(f"P1 rect coords: ({int(p1_xy_coords[0])}, {int(p1_xy_coords[1])})")
-        print(f"P2 rect coords: ({int(p2_xy_coords[0])}, {int(p2_xy_coords[1])})")
-        print(f"P1 polar coords: ({int(p1_rp_coords[0])}, {p1_rp_coords[1]:.2f})")
-        print(f"P2 polar coords: ({int(p2_rp_coords[0])}, {p2_rp_coords[1]:.2f})")
-        print(f"length: {length}")
-        print(f"angle: {angle}")
-        print(f"distance: {distance}")
+        print(f"P1 rect coords: ({int(p1_xy_coords[0]):.2f}, {int(p1_xy_coords[1]):.2f})")
+        print(f"P2 rect coords: ({int(p2_xy_coords[0]):.2f}, {int(p2_xy_coords[1]):.2f})")
+        print(f"P1 polar coords: ({int(p1_rp_coords[0]):.2f}, {p1_rp_coords[1]:.2f})")
+        print(f"P2 polar coords: ({int(p2_rp_coords[0]):.2f}, {p2_rp_coords[1]:.2f})")
+        print(f"length: {length:.2f} cm")
+        print(f"angle: {angle:.2f} deg")
+        print(f"distance: {distance:.2f} cm")
         print()
 
-def approach_to_dist(dist):
-    data = car.scan()
+def approach_wall(carspeed, clearance):
+    """Approach wall squarely at carspeed until distance to wall < clearance.
+    """
+    data = car.scan(spd=180, lev=17500, hev=22500)
     pscan = proscan.ProcessScan(data)
-    pscan.map
     line_params = pscan.get_line_parameters()
+    print_line_params(line_params)
+
+    # Examine first line found
+    coords, length, angle, dist = line_params[0]
+    pscan.map(display_all_points=True)
+    print("Approaching wall")
+    print(f"Dist = {int(dist)}")
+    print(f"Angle = {angle:.2f}")
+    target_angle = 0
+    if length > clearance:
+        car.go_F(carspeed)
+
+    # initialize steering variables
+    trim = 3  # estimate of needed steering trim
+    prev_error = angle - target_angle
+    while dist > clearance:
+        data = car.scan(spd=180, lev=17500, hev=22500)
+        pscan = proscan.ProcessScan(data)
+        line_params = pscan.get_line_parameters()
+
+        # Examine first line found
+        coords, length, angle, dist = line_params[0]
+        print()
+        print(f"Dist = {int(dist)} cm")
+        print(f"Angle = {angle:.2f} deg")
+        # Adjust trim to maintain angle=target using pid feedback loop
+        error = angle - target_angle
+        p_term = error
+        d_term = error - prev_error
+        prev_error = error
+        adjustment = int((p_term * KP + d_term * KD))
+        trim += adjustment
+        print(f"p_term = {p_term:.2f}, d_term = {d_term:.2f}, trim = {trim}")
+        car.go_F(carspeed, trim=trim)
+
+    car.stop_wheels()
 
 
 if __name__ == "__main__":
 
-    # drive_and_scan()
-    # data = car.scan(lev=16000, hev=24000)
-    data = car.scan()
-    #pscan = proscan.ProcessScan(data, lev=15000, end=25000)
-    pscan = proscan.ProcessScan(data)
-    print(pscan.regions)
-    print()
-    pscan.map()
-
-    # get 'CLAD' (coords, length, angle and dist) parameters for lines
-    line_parameters = pscan.get_line_parameters()
-    print_line_params(line_parameters)
+    approach_wall(CARSPEED, 50)
 
     car.close()
