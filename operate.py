@@ -21,75 +21,8 @@ MIN_LENGTH = 20  # threshold min length to end of wall
 MIN_DIST = 40  # threshold min distance from car to wall
 KP = 0.5  # steering PID proportional coefficient
 KD = 0.6  # steering PID derivative coefficient
-CARSPEED = 100  # default car speed
+CARSPEED = 50  # default car speed max=100, min=25
 
-def jog_FR(spd, t, trim=5):
-    """Jog diagonally forward + right at spd (int 0-255) for t seconds
-    """
-    car.go_FR(spd, trim)
-    time.sleep(t)
-    car.stop_wheels()
-    time.sleep(PAUSE)
-
-def jog_FL(spd, t, trim=5):
-    """Jog diagonally forward + left at spd (int 0-255) for t seconds
-    """
-    car.go_FL(spd, trim)
-    time.sleep(t)
-    car.stop_wheels()
-    time.sleep(PAUSE)
-
-def jog_BL(spd, t, trim=5):
-    """Jog diagonally back + left at spd (int 0-255) for t seconds
-    """
-    car.go_BL(spd, trim)
-    time.sleep(t)
-    car.stop_wheels()
-    time.sleep(PAUSE)
-
-def jog_BR(spd, t, trim=5):
-    """Jog diagonally back + right at spd (int 0-255) for t seconds
-    """
-    car.go_BR(spd, trim)
-    time.sleep(t)
-    car.stop_wheels()
-    time.sleep(PAUSE)
-
-def jog_F(spd, t, trim=5):
-    """Jog forward at spd (int: 100-255) for t seconds
-    trim (int) is used to null out any unwanted spin.
-    """
-    car.go_F(spd, trim)
-    time.sleep(t)
-    car.stop_wheels()
-    time.sleep(PAUSE)
-
-def jog_B(spd, t, trim=5):
-    """Jog backward at spd (int: 100-255) for t seconds
-    trim (int) is used to null out any unwanted spin.
-    """
-    car.go_B(spd, trim)
-    time.sleep(t)
-    car.stop_wheels()
-    time.sleep(PAUSE)
-
-def jog_L(spd, t, trim=5):
-    """Jog left at spd (int: 100-255) for t seconds
-    trim (int) is used to null out any unwanted spin.
-    """
-    car.go_L(spd, trim)
-    time.sleep(t)
-    car.stop_wheels()
-    time.sleep(PAUSE)
-
-def jog_R(spd, t, trim=7):
-    """Jog right at spd (int: 100-255) for t seconds
-    trim (int) is used to null out any unwanted spin.
-    """
-    car.go_R(spd, trim)
-    time.sleep(t)
-    car.stop_wheels()
-    time.sleep(PAUSE)
 
 def jog_cw(spd, t):
     """Spin car CW at spd (int between 100-255) for t seconds
@@ -360,10 +293,10 @@ def approach_wall(carspeed, clearance):
     logger.debug(f"Angle = {angle:.2f}")
     target_angle = 0
     if length > clearance:
-        car.go_F(carspeed)
+        car.go(carspeed, math.pi/2)
 
     # initialize steering variables
-    trim = 3  # estimate of needed steering trim
+    trim = 6  # estimate of needed steering trim
     prev_error = angle - target_angle
     while dist > clearance:
         data = car.scan(spd=180, lev=17500, hev=22500)
@@ -383,7 +316,7 @@ def approach_wall(carspeed, clearance):
         adjustment = int((p_term * KP + d_term * KD))
         trim += adjustment
         logger.debug(f"p_term = {p_term:.2f}, d_term = {d_term:.2f}, trim = {trim}")
-        car.go_F(carspeed, trim=trim)
+        car.go(carspeed, math.pi/2, spin=0.5 * trim)
 
     car.stop_wheels()
 
@@ -391,5 +324,11 @@ def approach_wall(carspeed, clearance):
 if __name__ == "__main__":
 
     approach_wall(CARSPEED, CLEARANCE)
-
+    '''
+    degrees = 270
+    heading = degrees * math.pi / 180
+    car.go(50, heading, spin=-10)
+    time.sleep(2)
+    car.stop_wheels()
+    '''
     car.close()

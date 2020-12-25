@@ -63,6 +63,12 @@ def read_raw_data(addr):
         value = value - 65536
     return value
 
+def convert_polar_to_rect(r, theta):
+    """Convert polar coords (r, theta) to rectangular coords (x,y)
+    theta is in radians."""
+    x = r * math.cos(theta)
+    y = r * math.sin(theta)
+    return (x, y)
 
 class OmniCar():
     """
@@ -90,7 +96,7 @@ class OmniCar():
     def heading(self):
         """Return magnetic compass heading of car (degrees)."""
 
-        # Read Accelerometer raw value
+        # Read raw value
         x = read_raw_data(X_AXIS_H)
         z = read_raw_data(Z_AXIS_H)
         y = read_raw_data(Y_AXIS_H)
@@ -98,6 +104,7 @@ class OmniCar():
         # working in radians...
         heading = math.atan2(y, x)
 
+        # calibration worked out experimentally
         heading = heading + .44 * math.cos((heading + .175)) + .0175
         heading = heading - math.pi / 2
 
@@ -121,54 +128,60 @@ class OmniCar():
             msg = [mtr+8, spd]  # 4th bit in high byte -> reverse dir
         _ = spi.xfer(msg)
 
-    def go_F(self, spd, trim=None):
-        """Drive forward at speed = spd with steering trim."""
-        if not trim:
-            trim = 0
-        spd, trim = self.govern(spd, trim)
-        msg4 = [4, spd + trim]
-        msg3 = [3+8, spd - trim]
-        msg1 = [1, spd + trim]
-        msg2 = [2+8, spd - trim]
-        for msg in (msg1, msg2, msg3, msg4):
-            _ = spi.xfer(msg)
-            time.sleep(SPI_WAIT)
+    def go(self, speed, theta, spin=0):
+        """Drive at speed (0 - 100) in relative direction theta (rad)
+        while simultaneoulsy spinning CCW at rate spin."""
 
-    def go_B(self, spd, trim=None):
-        """Drive backward at speed = spd with steering trim."""
-        if not trim:
-            trim = 0
-        spd, trim = self.govern(spd, trim)
-        msg4 = [4+8, spd]
-        msg3 = [3, spd]
-        msg1 = [1+8, spd]
-        msg2 = [2, spd]
-        for msg in (msg1, msg2, msg3, msg4):
-            _ = spi.xfer(msg)
-            time.sleep(SPI_WAIT)
+        u, v = convert_polar_to_rect(speed, theta - math.pi/4)
 
-    def go_L(self, spd, trim=None):
-        """Drive left at speed = spd with steering trim."""
-        if not trim:
-            trim = 0
-        spd, trim = self.govern(spd, trim)
-        msg4 = [4, spd]
-        msg3 = [3+8, spd]
-        msg1 = [1+8, spd]
-        msg2 = [2, spd]
-        for msg in (msg1, msg2, msg3, msg4):
-            _ = spi.xfer(msg)
-            time.sleep(SPI_WAIT)
+        # motor numbers
+        m1, m2, m3, m4 = (1, 2, 3, 4)
 
-    def go_R(self, spd, trim=None):
-        """Drive right at speed = spd with steering trim."""
-        if not trim:
-            trim = 0
-        spd, trim = self.govern(spd, trim)
-        msg4 = [4+8, spd - trim]
-        msg3 = [3, spd + trim]
-        msg1 = [1, spd + trim]
-        msg2 = [2+8, spd - trim]
+        # convert 0-100 motor speed to int 0-200
+        m1spd = int(spin + 2 * u)
+        m2spd = int(spin - 2 * u)
+        m3spd = int(spin - 2 * v)
+        m4spd = int(spin + 2 * v)
+
+        # set the reverse direction flag, if motor speed is negative
+        if m1spd < 0:
+            m1 += 8
+            m1spd = abs(m1spd)
+        if m2spd < 0:
+            m2 += 8
+            m2spd = abs(m2spd)
+        if m3spd < 0:
+            m3 += 8
+            m3spd = abs(m3spd)
+        if m4spd < 0:
+            m4 += 8
+            m4spd = abs(m4spd)
+
+        # friction keeps motors from running at speeds below ~50
+        if 0 < m1spd < 50:
+            m1spd = 50
+        if 0 < m2spd < 50:
+            m2spd = 50
+        if 0 < m3spd < 50:
+            m3spd = 50
+        if 0 < m4spd < 50:
+            m4spd = 50
+
+        # make sure motor speed never exceeds 255
+        if m1spd > 255:
+            m1spd = 255
+        if m2spd > 255:
+            m2spd = 255
+        if m3spd > 255:
+            m3spd = 255
+        if m4spd > 255:
+            m4spd = 255
+        
+        msg1 = (m1, abs(m1spd))
+        msg2 = (m2, abs(m2spd))
+        msg3 = (m3, abs(m3spd))
+        msg4 = (m4, abs(m4spd))
+
         for msg in (msg1, msg2, msg3, msg4):
             _ = spi.xfer(msg)
             time.sleep(SPI_WAIT)
@@ -201,54 +214,6 @@ class OmniCar():
         """Stop all wheel motors (mtr numbers: 1 thrugh 4)."""
         for n in range(1, 5):
             _ = spi.xfer([n, 0])
-            time.sleep(SPI_WAIT)
-
-    def go_FR(self, spd, trim=None):
-        """Drive diagonally forward + right at speed = spd
-        with steering trim."""
-        if not trim:
-            trim = 0
-        spd, trim = self.govern(spd, trim)
-        msg1 = [1, spd + trim]
-        msg2 = [2+8, spd - trim]
-        for msg in (msg1, msg2):
-            _ = spi.xfer(msg)
-            time.sleep(SPI_WAIT)
-
-    def go_FL(self, spd, trim=None):
-        """Drive diagonally forward + left at speed = spd
-        with steering trim."""
-        if not trim:
-            trim = 0
-        spd, trim = self.govern(spd, trim)
-        msg1 = [4, spd + trim]
-        msg2 = [3+8, spd - trim]
-        for msg in (msg1, msg2):
-            _ = spi.xfer(msg)
-            time.sleep(SPI_WAIT)
-
-    def go_BL(self, spd, trim=None):
-        """Drive diagonally back + left at speed = spd
-        with steering trim."""
-        if not trim:
-            trim = 0
-        spd, trim = self.govern(spd, trim)
-        msg1 = [1+8, spd - trim]
-        msg2 = [2, spd + trim]
-        for msg in (msg1, msg2):
-            _ = spi.xfer(msg)
-            time.sleep(SPI_WAIT)
-
-    def go_BR(self, spd, trim=None):
-        """Drive diagonally back + right at speed = spd
-        with steering trim."""
-        if not trim:
-            trim = 0
-        spd, trim = self.govern(spd, trim)
-        msg1 = [4+8, spd - trim]
-        msg2 = [3, spd + trim]
-        for msg in (msg1, msg2):
-            _ = spi.xfer(msg)
             time.sleep(SPI_WAIT)
 
     def read_dist(self):
