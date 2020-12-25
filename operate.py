@@ -219,7 +219,7 @@ def cross_corner_scan(spd=CARSPEED):
     with open('corner_data.pkl', 'wb') as f:
         pickle.dump(data_list, f)
 
-def rel_bearing(target):
+def relative_bearing(target):
     """Return 'relative' bearing of an 'absolute' target."""
     delta = target - 180
     rel_brng = car.heading() - delta
@@ -231,18 +231,18 @@ def turn_to(target):
     """Turn to target heading (degrees)."""
     # To avoid the complication of the 360 / 0 transition, convert
     # the problem to one of aiming for a target at 180 degrees.
-    rel_heading = rel_bearing(target)
+    rel_heading = relative_bearing(target)
     if rel_heading > 180:
         car.spin_ccw(80)
         while rel_heading > 180:
             logger.debug(f"relative heading: {rel_heading}")
-            rel_heading = rel_bearing(target)
+            rel_heading = relative_bearing(target)
             time.sleep(0.1)
     elif rel_heading < 180:
         car.spin_cw(80)
         while rel_heading < 180:
             logger.debug(f"relative heading: {rel_heading}")
-            rel_heading = rel_bearing(target)
+            rel_heading = relative_bearing(target)
             time.sleep(0.1)
     car.stop_wheels()
 
@@ -316,7 +316,7 @@ def approach_wall(carspeed, clearance):
         adjustment = int((p_term * KP + d_term * KD))
         trim += adjustment
         logger.debug(f"p_term = {p_term:.2f}, d_term = {d_term:.2f}, trim = {trim}")
-        car.go(carspeed, math.pi/2, spin=0.5 * trim)
+        car.go(carspeed, math.pi/2, spin=trim)
 
     car.stop_wheels()
 
