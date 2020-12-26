@@ -61,7 +61,7 @@ class Point():
 # Default values used in ProcessScan
 LEV = 10000  # Start of sector (Low Encoder Value)
 HEV = 30000  # End of sector (High Encoder Value)
-GAP = 8
+GAP = 5
 CORNER = 7
 HOOK = 2
 
