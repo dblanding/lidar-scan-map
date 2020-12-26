@@ -142,106 +142,117 @@ def get_indx_of_longest_line(line_params):
                 maxlen = length
     return indx
 
-def along_wall_to_right(carspeed, clearance):
-    """Drive to right maintaining clearance to wall in front. Stop at end."""
-    data = car.scan(spd=180, lev=17500, hev=22500)
-    pscan = proscan.ProcessScan(data)
-    line_params = pscan.get_line_parameters()
-
-    # Examine longest line found
-    indx = get_indx_of_longest_line(line_params)
-    coords, length, angle, dist = line_params[indx]
-    end_of_wall = coords[-1][0]  # x coordinate of right end of wall
-    logger.debug("")
-    logger.debug(f"Dist = {int(dist)}")
-    logger.debug(f"Angle = {angle:.2f}")
-    logger.debug(f"end_of_wall = {end_of_wall}")
-    pscan.map(nmbr=2, display_all_points=True)
-    target_angle = 0
-    if end_of_wall > 10:
-        car.go(carspeed, 0)
-    logger.debug("")
-    logger.debug("Driving to right along wall.")
-
-    # initialize steering variables
-    trim = 6  # estimate of needed steering trim
-    prev_error = angle - target_angle
-    while end_of_wall > 10:  # continue to end of wall
-        data = car.scan(spd=180, lev=17500, hev=22500)
-        pscan = proscan.ProcessScan(data)
-        line_params = pscan.get_line_parameters()
-        # Examine longest line found
-        indx = get_indx_of_longest_line(line_params)
-        coords, length, angle, dist = line_params[indx]
-        end_of_wall = coords[-1][0]  # x coordinate of right end of wall
-        logger.debug("")
-        logger.debug(f"Dist = {int(dist)}")
-        logger.debug(f"Angle = {angle:.2f}")
-        logger.debug(f"end_of_wall = {end_of_wall:.2f}")
-        
-        # Adjust trim to keep car heading matched to steer_target
-        # Use pid feedback loop
-        error = angle - target_angle
-        p_term = error
-        d_term = error - prev_error
-        prev_error = error
-        adjustment = int((p_term * KP + d_term * KD))
-        trim += adjustment
-        logger.debug(f"p_term = {p_term:.2f}, d_term = {d_term:.2f}, trim = {trim}")
-        car.go(carspeed, 0, spin=trim)
-
-    car.stop_wheels()
-    pscan.map(nmbr=3, display_all_points=False)
-
-
 def approach_wall(carspeed, clearance):
-    """Approach wall squarely at carspeed until distance to wall < clearance.
-    """
+    """Approach wall squarely at carspeed until distance to wall < clearance."""
+
+    # get scan line(s)
     data = car.scan(spd=180, lev=17500, hev=22500)
     pscan = proscan.ProcessScan(data, gap=6)
     line_params = pscan.get_line_parameters()
-    print_line_params(line_params)
-
+    
     # Examine first line found
     coords, length, angle, dist = line_params[0]
+
+    # display and save initial map
     pscan.map(nmbr=1, display_all_points=True)
-    logger.debug("Approaching wall")
-    logger.debug(f"Dist = {int(dist)}")
-    logger.debug(f"Angle = {angle:.2f}")
-    target_angle = 0
+
+    # OK to proceed?
     if dist > clearance:
         car.go(carspeed, math.pi/2)
+        logger.debug("")
+        logger.debug(f"Approach wall to dist < {clearance}.")
 
     # initialize steering variables
     trim = 6  # estimate of needed steering trim
+    target_angle = 0
     prev_error = angle - target_angle
+    logger.debug("")
+    logger.debug(f"Dist\tAngle\tPterm\tDterm\ttrim")
+
+    # continue toward wall
     while dist > clearance:
+        # get scan line(s)
         data = car.scan(spd=180, lev=17500, hev=22500)
         pscan = proscan.ProcessScan(data, gap=6)
         line_params = pscan.get_line_parameters()
 
         # Examine first line found
         coords, length, angle, dist = line_params[0]
-        logger.info('')
-        logger.info(f"Dist = {int(dist)} cm")
-        logger.info(f"Angle = {angle:.2f} deg")
-        # Adjust trim to maintain angle=target using pid feedback loop
+        
+        # Adjust trim to maintain angle=target using pid feedback
         error = angle - target_angle
         p_term = error
         d_term = error - prev_error
         prev_error = error
         adjustment = int((p_term * KP + d_term * KD))
         trim += adjustment
-        logger.debug(f"p_term = {p_term:.2f}, d_term = {d_term:.2f}, trim = {trim}")
+        logger.debug(f"{int(dist)}\t{angle:.2f}\t{p_term:.2f}\t{d_term:.2f}\t{trim}")
         car.go(carspeed, math.pi/2, spin=trim)
 
     car.stop_wheels()
+
+def drive_along_wall_to_right(carspeed, clearance):
+    """Drive to right maintaining clearance to wall in front. Stop at end."""
+
+    EOW = 10
+    # get scan line(s)
+    data = car.scan(spd=180, lev=17500, hev=22500)
+    pscan = proscan.ProcessScan(data, gap=5)
+    line_params = pscan.get_line_parameters()
+
+    # find longest line 
+    indx = get_indx_of_longest_line(line_params)
+    coords, length, angle, dist = line_params[indx]
+    end_of_wall = coords[-1][0]  # x coordinate of right end of wall
+
+    # display and save initial map
+    pscan.map(nmbr=2, display_all_points=True)
+
+    # OK to proceed?
+    if end_of_wall > EOW:
+        car.go(carspeed, 0)
+        logger.debug("")
+        logger.debug(f"Drive right until end of wall < {EOW}")
+
+    # initialize steering variables
+    trim = 6  # estimate of needed steering trim
+    target_angle = 0
+    prev_error = angle - target_angle
+    logger.debug("")
+    logger.debug(f"Dist\tAngle\tEOW\tPterm\tDterm\ttrim")
+
+    # continue to end of wall
+    while end_of_wall > EOW:
+        # get scan line(s)
+        data = car.scan(spd=180, lev=17500, hev=22500)
+        pscan = proscan.ProcessScan(data, gap=5)
+        line_params = pscan.get_line_parameters()
+    
+        # find longest line 
+        indx = get_indx_of_longest_line(line_params)
+        coords, length, angle, dist = line_params[indx]
+        end_of_wall = coords[-1][0]  # x coordinate of right end of wall
+
+        # Adjust trim to maintain angle=target using pid feedback
+        error = angle - target_angle
+        p_term = error
+        d_term = error - prev_error
+        prev_error = error
+        adjustment = int((p_term * KP + d_term * KD))
+        trim += adjustment
+        logger.debug(f"{int(dist)}\t{angle:.2f}\t{end_of_wall:.2f}\t{p_term:.2f}\t{d_term:.2f}\t{trim}")
+        car.go(carspeed, 0, spin=trim)
+
+    car.stop_wheels()
+
+    # display and save final map
+    pscan.map(nmbr=3, display_all_points=False)
 
 
 if __name__ == "__main__":
 
     approach_wall(CARSPEED, CLEARANCE)
-    along_wall_to_right(CARSPEED, CLEARANCE)
+    drive_along_wall_to_right(CARSPEED, CLEARANCE)
     '''
     degrees = 270
     heading = degrees * math.pi / 180
