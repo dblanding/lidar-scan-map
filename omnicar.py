@@ -48,21 +48,6 @@ X_AXIS_H = 0x03  # Address of X-axis MSB data register
 Z_AXIS_H = 0x05  # Address of Z-axis MSB data register
 Y_AXIS_H = 0x07  # Address of Y-axis MSB data register
 
-def read_raw_data(addr):
-    """Read from HMC5883L data registers"""
-
-    # Read raw 16-bit value
-    high = i2cbus.read_byte_data(HMC5883_ADDRESS, addr)
-    low = i2cbus.read_byte_data(HMC5883_ADDRESS, addr+1)
-
-    # concatenate higher and lower value
-    value = ((high << 8) | low)
-
-    # get signed value from module
-    if value > 32768:
-        value = value - 65536
-    return value
-
 def convert_polar_to_rect(r, theta):
     """Convert polar coords (r, theta) to rectangular coords (x,y)
     theta is in radians."""
@@ -93,13 +78,28 @@ class OmniCar():
         # 0x00 (continuous measurenent mode)
         i2cbus.write_byte_data(HMC5883_ADDRESS, REGISTER_MODE, 0x00)
 
+    def read_raw_data(self, addr):
+        """Read from HMC5883L data registers"""
+
+        # Read raw 16-bit value
+        high = i2cbus.read_byte_data(HMC5883_ADDRESS, addr)
+        low = i2cbus.read_byte_data(HMC5883_ADDRESS, addr+1)
+
+        # concatenate higher and lower value
+        value = ((high << 8) | low)
+
+        # get signed value from module
+        if value > 32768:
+            value = value - 65536
+        return value
+
     def heading(self):
         """Return magnetic compass heading of car (degrees)."""
 
         # Read raw value
-        x = read_raw_data(X_AXIS_H)
-        z = read_raw_data(Z_AXIS_H)
-        y = read_raw_data(Y_AXIS_H)
+        x = self.read_raw_data(X_AXIS_H)
+        z = self.read_raw_data(Z_AXIS_H)
+        y = self.read_raw_data(Y_AXIS_H)
         # print(x, y, z)
         # working in radians...
         heading = math.atan2(y, x)

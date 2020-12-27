@@ -22,7 +22,7 @@ MIN_LENGTH = 20  # threshold min length to end of wall (cm)
 MIN_DIST = 40  # threshold min distance from car to wall (cm)
 KP = 0.25  # steering PID proportional coefficient
 KD = 0.3  # steering PID derivative coefficient
-CARSPEED = 50  # default car speed max=100, min=25
+CARSPEED = 60  # default car speed max=100, min=25
 
 def relative_bearing(target):
     """Return 'relative' bearing of an 'absolute' target."""
@@ -32,32 +32,35 @@ def relative_bearing(target):
         rel_brng += 360
     return rel_brng
 
-def turn_to(target):
+def turn_to(target, spin_ratio):
     """Turn to target heading (degrees)."""
+    trim = CARSPEED * spin_ratio
     # To avoid the complication of the 360 / 0 transition,
     # convert problem to one of aiming for a target at 180 degrees.
     rel_heading = relative_bearing(target)
     if rel_heading > 180:
-        car.spin_ccw(80)
+        car.go(CARSPEED, 0, spin=trim)
         while rel_heading > 180:
             logger.debug(f"relative heading: {rel_heading}")
             rel_heading = relative_bearing(target)
             time.sleep(0.1)
     elif rel_heading < 180:
-        car.spin_cw(80)
+        car.go(CARSPEED, 0, spin=trim)
         while rel_heading < 180:
             logger.debug(f"relative heading: {rel_heading}")
             rel_heading = relative_bearing(target)
             time.sleep(0.1)
     car.stop_wheels()
 
-def turn(angle):
-    """Spin car angle degrees (CCW positive)."""
+def turn(angle, turn_radius):
+    """Turn car angle degrees (CCW positive)."""
+    spin_ratio = (W2W_DIST / 2 / turn_radius) / math.sqrt(2)
+    trim = CARSPEED * spin_ratio
     start_heading = car.heading()
     end_heading = start_heading - angle
     if end_heading < 0:
         end_heading += 360
-    turn_to(end_heading)
+    turn_to(end_heading, spin_ratio)
 
 def r2p(xy_coords):
     """Convert rect coords (x, y) to polar (r, theta)
@@ -207,20 +210,22 @@ def drive_along_wall_to_right(carspeed, clearance, mapping=False):
 def round_corner(speed, turn_radius):
     logger.debug("")
     logger.debug(f"turning left: corner R = {int(turn_radius)}")
-    
+    # To avoid the complication of the 360 / 0 transition,
+    # convert problem to one of aiming for a target at 180 degrees.
+    rel_heading = relative_bearing(target)
+
+    start_heading = car.heading()
     spin_ratio = (W2W_DIST / 2 / turn_radius) / math.sqrt(2)
     logger.debug("")
     logger.debug(f"spin_ratio = {spin_ratio:.2f}")
     trim = speed * spin_ratio
     car.go(speed, 0, spin=trim)
-    time.sleep(8)
     car.stop_wheels()
-    
+
 
 if __name__ == "__main__":
 
     dist = approach_wall(CARSPEED, CLEARANCE)
     dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)
-    round_corner(CARSPEED, dist)
-        
+    turn(90, dist)
     car.close()
