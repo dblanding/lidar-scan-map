@@ -15,63 +15,14 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = omnicar.OmniCar()
 
+W2W_DIST = 34  # separation between coaxial wheels (cm)
 PAUSE = 0.05  # sec PAUSE time needed between wheel motor commands
-CLEARANCE = 60  # threshold min clearance to wall
-MIN_LENGTH = 20  # threshold min length to end of wall
-MIN_DIST = 40  # threshold min distance from car to wall
-KP = 0.5  # steering PID proportional coefficient
-KD = 0.6  # steering PID derivative coefficient
+CLEARANCE = 60  # threshold min clearance to wall (cm)
+MIN_LENGTH = 20  # threshold min length to end of wall (cm)
+MIN_DIST = 40  # threshold min distance from car to wall (cm)
+KP = 0.25  # steering PID proportional coefficient
+KD = 0.3  # steering PID derivative coefficient
 CARSPEED = 50  # default car speed max=100, min=25
-
-
-def jog_cw(spd, t):
-    """Spin car CW at spd (int between 100-255) for t seconds
-    """
-    car.spin_cw(spd)
-    time.sleep(t)
-    car.stop_wheels()
-    time.sleep(PAUSE)
-
-def jog_ccw(spd, t):
-    """Spin car CCW at spd (int between 100-255) for t seconds
-    """
-    car.spin_ccw(spd)
-    time.sleep(t)
-    car.stop_wheels()
-    time.sleep(PAUSE)
-
-def scan_series(nbr, lev=10000, hev=30000):
-    """Perform a series of nbr successive scans of angular sector from
-    lev (low encoder value) to hev (high encoder value), moving the car
-    between scans. Save the raw scan data as a pickle file.
-    Generate & save map plots.
-    """
-    data_list = []  # list of scan data from multiple scans
-    while nbr:
-        scan_data = car.scan(lev=lev, hev=hev)
-        logger.debug(scan_data[0])
-        logger.debug("Number of data points: ", len(scan_data))
-        scan_data.pop(0)  # may have 'stale' serial data
-        logger.debug(scan_data[0])
-        logger.debug("Number of data points: ", len(scan_data))
-        data_list.append(scan_data)
-        nbr -= 1
-        if nbr:
-            time.sleep(PAUSE)
-            # Move the car between successive scans
-            # jog_R(100, 0.75)
-            jog_F(100, 1.0, trim=5)
-
-    # Save scan data for later examination, if desired.
-    with open('scan_data.pkl', 'wb') as f:
-        pickle.dump(data_list, f)
-
-    # map the scans
-    for n, scan_data in enumerate(data_list):
-        logger.debug()
-        logger.debug(f"Scan number {n+1} of {len(data_list)}")
-        map_scan_data.show_map(scan_data, n+1)
-
 
 def relative_bearing(target):
     """Return 'relative' bearing of an 'absolute' target."""
@@ -83,8 +34,8 @@ def relative_bearing(target):
 
 def turn_to(target):
     """Turn to target heading (degrees)."""
-    # To avoid the complication of the 360 / 0 transition, convert
-    # the problem to one of aiming for a target at 180 degrees.
+    # To avoid the complication of the 360 / 0 transition,
+    # convert problem to one of aiming for a target at 180 degrees.
     rel_heading = relative_bearing(target)
     if rel_heading > 180:
         car.spin_ccw(80)
@@ -142,7 +93,7 @@ def get_indx_of_longest_line(line_params):
                 maxlen = length
     return indx
 
-def approach_wall(carspeed, clearance):
+def approach_wall(carspeed, clearance, mapping=False):
     """Approach wall squarely at carspeed until distance to wall < clearance."""
 
     # get scan line(s)
@@ -154,7 +105,8 @@ def approach_wall(carspeed, clearance):
     coords, length, angle, dist = line_params[0]
 
     # display and save initial map
-    pscan.map(nmbr=1, display_all_points=True)
+    if mapping:
+        pscan.map(nmbr=1, display_all_points=True)
 
     # OK to proceed?
     if dist > clearance:
@@ -163,7 +115,7 @@ def approach_wall(carspeed, clearance):
         logger.debug(f"Approach wall to dist < {clearance}.")
 
     # initialize steering variables
-    trim = 6  # estimate of needed steering trim
+    trim = 3  # estimate of needed steering trim
     target_angle = 0
     prev_error = angle - target_angle
     logger.debug("")
@@ -191,8 +143,9 @@ def approach_wall(carspeed, clearance):
 
     car.stop_wheels()
 
-def drive_along_wall_to_right(carspeed, clearance):
-    """Drive to right maintaining clearance to wall in front. Stop at end."""
+def drive_along_wall_to_right(carspeed, clearance, mapping=False):
+    """Drive to right maintaining clearance to wall in front. Stop at end.
+    Return dist value at end."""
 
     EOW = 10
     # get scan line(s)
@@ -206,7 +159,8 @@ def drive_along_wall_to_right(carspeed, clearance):
     end_of_wall = coords[-1][0]  # x coordinate of right end of wall
 
     # display and save initial map
-    pscan.map(nmbr=2, display_all_points=True)
+    if mapping:
+        pscan.map(nmbr=2, display_all_points=True)
 
     # OK to proceed?
     if end_of_wall > EOW:
@@ -215,7 +169,7 @@ def drive_along_wall_to_right(carspeed, clearance):
         logger.debug(f"Drive right until end of wall < {EOW}")
 
     # initialize steering variables
-    trim = 6  # estimate of needed steering trim
+    trim = 3  # estimate of needed steering trim
     target_angle = 0
     prev_error = angle - target_angle
     logger.debug("")
@@ -246,18 +200,27 @@ def drive_along_wall_to_right(carspeed, clearance):
     car.stop_wheels()
 
     # display and save final map
-    pscan.map(nmbr=3, display_all_points=False)
+    if mapping:
+        pscan.map(nmbr=3, display_all_points=False)
+    return dist
 
+def round_corner(speed, turn_radius):
+    logger.debug("")
+    logger.debug(f"turning left: corner R = {int(turn_radius)}")
+    
+    spin_ratio = (W2W_DIST / 2 / turn_radius) / math.sqrt(2)
+    logger.debug("")
+    logger.debug(f"spin_ratio = {spin_ratio:.2f}")
+    trim = speed * spin_ratio
+    car.go(speed, 0, spin=trim)
+    time.sleep(8)
+    car.stop_wheels()
+    
 
 if __name__ == "__main__":
 
-    approach_wall(CARSPEED, CLEARANCE)
-    drive_along_wall_to_right(CARSPEED, CLEARANCE)
-    '''
-    degrees = 270
-    heading = degrees * math.pi / 180
-    car.go(50, heading, spin=-10)
-    time.sleep(2)
-    car.stop_wheels()
-    '''
+    dist = approach_wall(CARSPEED, CLEARANCE)
+    dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)
+    round_corner(CARSPEED, dist)
+        
     car.close()

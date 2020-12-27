@@ -129,19 +129,21 @@ class OmniCar():
         _ = spi.xfer(msg)
 
     def go(self, speed, theta, spin=0):
-        """Drive at speed (0 - 100) in relative direction theta (rad)
-        while simultaneoulsy spinning CCW at rate spin."""
+        """Drive at speed (0-100) in relative direction theta (rad)
+        while simultaneoulsy spinning CCW at rate = spin (0-100)."""
 
+        # convert from polar coordinates to omni_car's 'natural' coords
+        # where one pair of wheels drives u and the other pair drives v
         u, v = convert_polar_to_rect(speed, theta - math.pi/4)
 
         # motor numbers
         m1, m2, m3, m4 = (1, 2, 3, 4)
 
-        # convert 0-100 motor speed to int 0-200
-        m1spd = int(spin + 2 * u)
-        m2spd = int(spin - 2 * u)
-        m3spd = int(spin - 2 * v)
-        m4spd = int(spin + 2 * v)
+        # convert 0-100 motor speed to 0-200 integer, adding spin
+        m1spd = int(spin + u) * 2
+        m2spd = int(spin - u) * 2
+        m3spd = int(spin - v) * 2
+        m4spd = int(spin + v) * 2
 
         # set the reverse direction flag, if motor speed is negative
         if m1spd < 0:
@@ -167,7 +169,7 @@ class OmniCar():
         if 0 < m4spd < 50:
             m4spd = 50
 
-        # make sure motor speed never exceeds 255
+        # motors can't handle values > 255
         if m1spd > 255:
             m1spd = 255
         if m2spd > 255:
@@ -182,7 +184,8 @@ class OmniCar():
         msg3 = (m3, abs(m3spd))
         msg4 = (m4, abs(m4spd))
 
-        for msg in (msg1, msg2, msg3, msg4):
+        # For some reason, the first msg needs to be repeated
+        for msg in (msg1, msg2, msg3, msg4, msg1):
             _ = spi.xfer(msg)
             time.sleep(SPI_WAIT)
 
