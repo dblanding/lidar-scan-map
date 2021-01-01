@@ -14,6 +14,9 @@ logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = omnicar.OmniCar()
+time.sleep(0.5)
+from_arduino = car.read_serial_data()
+logger.debug(f"Message from Arduino: {from_arduino}")
 
 W2W_DIST = 34  # separation between coaxial wheels (cm)
 PAUSE = 0.05  # sec PAUSE time needed between wheel motor commands
@@ -52,8 +55,8 @@ def turn_to(target, spin_ratio):
             time.sleep(0.1)
     car.stop_wheels()
 
-def turn(angle, turn_radius):
-    """Turn car angle degrees (CCW positive)."""
+def radius_turn(angle, turn_radius):
+    """Turn car angle degrees (CCW positive) at turn_radius (degrees)."""
     spin_ratio = (W2W_DIST / 2 / turn_radius) / math.sqrt(2)
     trim = CARSPEED * spin_ratio
     start_heading = car.heading()
@@ -224,8 +227,14 @@ def round_corner(speed, turn_radius):
 
 
 if __name__ == "__main__":
-
+    '''
     dist = approach_wall(CARSPEED, CLEARANCE)
     dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)
     turn(90, dist)
+    '''
+    data = car.go(60, 0)
+    print(f"'Sensor data' returned from car.go() command: {data}")
+    time.sleep(1)
+    data = car.stop_wheels()
+    print(f"'Sensor data' returned from car.stop_wheels() command: {data}")
     car.close()

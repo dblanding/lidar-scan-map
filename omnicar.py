@@ -17,26 +17,33 @@ the Raspberry Pi configured as SPI master, and the Arduino as slave.
 Wheel motors:
 See omni-wheels.md for an explanation of wheel motor drive.
 """
-
-import time
+import logging
 import math
+import os
 import serial
 import smbus
-import spidev
+import sys
+import time
 import Adafruit_ADS1x15
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
+logger.addHandler(logging.StreamHandler(sys.stdout))
 
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain
 
-ser = serial.Serial("/dev/ttyS0", 115200)
+# communicate with Arduino (bi-directional)
+ports = ['/dev/ttyACM0', '/dev/ttyACM1']
+for port in ports:
+    if os.path.exists(port):
+        ser0 = serial.Serial(port, 9600, timeout=.05)
+        ser0.flush()
+        break
+logger.info(f"Serial port = {port}")
 
-spi = spidev.SpiDev()  # Enable SPI
-SPIBUS = 0  # We only have SPI bus 0 available to us on the Pi
-DEVICE = 0  # Device is the chip select pin. Set to 0 or 1
-spi.open(SPIBUS, DEVICE)  # Open a connection
-spi.max_speed_hz = 500000  # Set SPI speed and mode
-spi.mode = 0
-SPI_WAIT = .006  # wait time (sec) between successive spi commands
+# get data from lidar module
+ser1 = serial.Serial("/dev/ttyUSB0", 115200)
 
 i2cbus = smbus.SMBus(1)
 HMC5883_ADDRESS = 0x1e   # 0x3c >> 1
@@ -61,9 +68,7 @@ class OmniCar():
     """
 
     def __init__(self):
-        """Configure HMC5883L, store most recent lidar distance."""
-
-        self.distance = 0  # distance (cm) of last measured LiDAR value
+        """Configure HMC5883L, store most recent sensor data."""
 
         # write to Configuration Register A
         # average 8 samples per measurement output
@@ -77,6 +82,44 @@ class OmniCar():
         # 0x01 (single measurement mode) is default
         # 0x00 (continuous measurenent mode)
         i2cbus.write_byte_data(HMC5883_ADDRESS, REGISTER_MODE, 0x00)
+
+        self.distance = 0  # last measured distance (cm) from lidar
+        
+    def read_serial_data(self):
+        line = "No serial data available"
+        if ser0.in_waiting:
+            in_bytes = ser0.readline()
+            in_string = in_bytes.decode("utf-8")
+            line = in_string.strip().split(',')
+            '''
+            try:
+                read_line = ser0.read_until()   # byte type
+                line = read_line.decode("utf-8").strip()
+            except UnicodeDecodeError:
+                line = None
+            '''
+        return line
+
+
+    def _xfer_data(self, send_data):
+        """Xfer data w/ Arduino: Get sensor data, send motor spd values
+
+        Send a tuple of 6 int values: (flag, m1, m2, m3, m4, m5)
+        flag = 0 (ignore motor values, just get sensor data)
+        flag = 1 (apply motor values m1 thru m4 and get sensor data)
+        flag = 2 (apply motor value m5 and get sensor data)
+        """
+        # convert integers to strings for sending on serial
+        send_data_str = (str(item) for item in send_data)
+        logger.debug(f"Data to send: {send_data}")
+        out_string = ",".join(send_data_str)
+        logger.debug(f"String being sent: {out_string}")
+        ser0.write(out_string.encode())
+        time.sleep(.5)  # wait for incoming sensor data
+        sensor_data = 1234
+        sensor_data = self.read_serial_data()
+        logger.debug(f"serial data read: {sensor_data}")
+        return sensor_data
 
     def read_raw_data(self, addr):
         """Read from HMC5883L data registers"""
@@ -117,23 +160,13 @@ class OmniCar():
 
         return heading_angle
 
-    def run_mtr(self, mtr, spd, rev=False):
-        """
-        Drive motor = mtr (int 0-7) at speed = spd (int 0-255)
-        in reverse direction if rev=True.
-        """
-        if not rev:
-            msg = [mtr, spd]  # High byte, Low byte
-        else:
-            msg = [mtr+8, spd]  # 4th bit in high byte -> reverse dir
-        _ = spi.xfer(msg)
-
     def go(self, speed, theta, spin=0):
         """Drive at speed (0-100) in relative direction theta (rad)
-        while simultaneoulsy spinning CCW at rate = spin (0-100)."""
+        while simultaneoulsy spinning CCW at rate = spin (0-100).
+        return sensor_data."""
 
         # convert from polar coordinates to omni_car's 'natural' coords
-        # where one pair of wheels drives u and the other pair drives v
+        # where one coaxial pair of wheels drives u and the other drives v
         u, v = convert_polar_to_rect(speed, theta - math.pi/4)
 
         # motor numbers
@@ -145,20 +178,6 @@ class OmniCar():
         m3spd = int(spin - v) * 2
         m4spd = int(spin + v) * 2
 
-        # set the reverse direction flag, if motor speed is negative
-        if m1spd < 0:
-            m1 += 8
-            m1spd = abs(m1spd)
-        if m2spd < 0:
-            m2 += 8
-            m2spd = abs(m2spd)
-        if m3spd < 0:
-            m3 += 8
-            m3spd = abs(m3spd)
-        if m4spd < 0:
-            m4 += 8
-            m4spd = abs(m4spd)
-
         # friction keeps motors from running at speeds below ~50
         if 0 < m1spd < 50:
             m1spd = 50
@@ -169,70 +188,60 @@ class OmniCar():
         if 0 < m4spd < 50:
             m4spd = 50
 
-        # motors can't handle values > 255
+        if -50 < m1spd < 0:
+            m1spd = -50
+        if -50 < m2spd < 0:
+            m2spd = -50
+        if -50 < m3spd < 0:
+            m3spd = -50
+        if -50 < m4spd < 0:
+            m4spd = -50
+
+        # motors can't handle values > 255 or < -255
         if m1spd > 255:
             m1spd = 255
+        if m1spd < -255:
+            m1spd = -255
         if m2spd > 255:
             m2spd = 255
+        if m2spd < -255:
+            m2spd = -255
         if m3spd > 255:
             m3spd = 255
+        if m3spd < -255:
+            m3spd = -255
         if m4spd > 255:
             m4spd = 255
-        
-        msg1 = (m1, abs(m1spd))
-        msg2 = (m2, abs(m2spd))
-        msg3 = (m3, abs(m3spd))
-        msg4 = (m4, abs(m4spd))
+        if m4spd < -255:
+            m4spd = -255
 
-        # For some reason, the first msg needs to be repeated
-        for msg in (msg1, msg2, msg3, msg4, msg1):
-            _ = spi.xfer(msg)
-            time.sleep(SPI_WAIT)
-
-    def spin_ccw(self, spd):
-        """Spin car CCW at speed = spd (int between 0-255)."""
-        for n in range(1, 5):
-            _ = spi.xfer([n, spd])
-            time.sleep(SPI_WAIT)
-
-    def spin_cw(self, spd):
-        """Spin car CW at speed = spd (int between 0-255)."""
-        for n in range(1, 5):
-            _ = spi.xfer([n+8, spd])
-            time.sleep(SPI_WAIT)
-
-    def govern(self, spd, trim):
-        """limit max values of spd and trim.
-        spd + trim must not exceed 255.
-        """
-        if spd > 240:
-            spd = 240
-        if trim > 15:
-            trim = 15
-        if trim < -15:
-            trim = -15
-        return spd, trim
+        sensor_data = self._xfer_data((1, m1spd, m2spd, m3spd, m4spd, 0))
+        return sensor_data
+    
+    def spin(self, spd):
+        """Spin car (about its own axis) at speed = spd (-255 to +255) (CCW = +)."""
+        sensor_data = self._xfer_data((1, spd, spd, spd, spd, 0))
+        return sensor_data
 
     def stop_wheels(self):
         """Stop all wheel motors (mtr numbers: 1 thrugh 4)."""
-        for n in range(1, 5):
-            _ = spi.xfer([n, 0])
-            time.sleep(SPI_WAIT)
+        sensor_data = self._xfer_data((1, 0, 0, 0, 0, 0))
+        return sensor_data
 
     def read_dist(self):
         """
         Set self.distance = distance (cm) read from LiDAR module.
         Return number of bytes that were waiting on serial port.
         """
-        counter = ser.in_waiting # bytes available on serial port
+        counter = ser1.in_waiting # bytes available on serial port
         if counter > 8:
-            bytes_serial = ser.read(9)
+            bytes_serial = ser1.read(9)
             if bytes_serial[0] == 0x59 and bytes_serial[1] == 0x59:
                 self.distance = bytes_serial[2] + bytes_serial[3]*256
                 self.strength = bytes_serial[4] + bytes_serial[5]*256
                 temperature = bytes_serial[6] + bytes_serial[7]*256
                 self.temperature = (temperature/8) - 256
-            ser.flushInput()  # Keep the buffer empty (purge stale data)
+            ser1.flushInput()  # Keep the buffer empty (purge stale data)
         return counter
 
     def get_enc_val(self):
@@ -241,11 +250,11 @@ class OmniCar():
 
     def scan_mtr_start(self, spd):
         """Turn scan motor on at speed = spd (int between 0-255)."""
-        self.run_mtr(7, spd)
+        sensor_data = self._xfer_data((2, 0, 0, 0, 0, spd))
 
     def scan_mtr_stop(self):
         """Turn scan motor off."""
-        self.run_mtr(7, 0)
+        sensor_data = self._xfer_data((2, 0, 0, 0, 0, 0))
 
     def scan(self, spd=200, lev=10000, hev=30000):
         """Run scan mtr at spd (100-255) and return list of tuples of
@@ -278,8 +287,8 @@ class OmniCar():
         return data
 
     def close(self):
-        spi.close()
-        ser.close()
+        ser0.close()
+        ser1.close()
         i2cbus.close()
 
 if __name__ == "__main__":

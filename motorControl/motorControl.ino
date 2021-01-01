@@ -1,202 +1,268 @@
 /*
- * Motor control code for up to 8 motors w/ 2 stacked mtr shields
- * Accepts input (from Raspberry Pi) on SPI bus (2 bytes).
- * Lower byte: motor speed (0-255)
- * Upper byte: bits 1,2,3 (0x1 = mtr1 ... 0x7 = mtr7); 4th bit = REVERSE rotation
+ * Motor control code for 5 motors on 2 stacked mtr shields
+ * Listen on serial port for 6 comma separated integer values
+ * First int value is a flag.
+ * if flag == 0:  just send back sensor data
+ * if flag == 1:  command 4 wheel motors with next 4 values
+ * if flag == 2:  command lidar rotor motor with last value
+ * regardless of flag value always send back sensor data
 */
 
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_HMC5883_U.h>
 #include <Adafruit_MotorShield.h>
+#define trigPin1 2
+#define echoPin1 3
+#define trigPin2 4
+#define echoPin2 5
+#define trigPin3 6
+#define echoPin3 7
 
-#define SCK_PIN   13  // D13 = pin19
-#define MISO_PIN  12  // D12 = pin18
-#define MOSI_PIN  11  // D11 = pin17
-#define SS_PIN    10  // D10 = pin16
+// Global variables needed by SR04 sensors
+long duration, distance, RightSensor, FrontSensor, LeftSensor;
 
+/* Create object anad Assign a unique ID to HMC5883L. */
+Adafruit_HMC5883_Unified mag = Adafruit_HMC5883_Unified(12345);
+
+// Global variables needed by lidar sensor
 #define UL unsigned long
 #define US unsigned short
-// wheel motors
+
+// Initialize Adafruit motor shield (wheel motors)
 Adafruit_MotorShield AFMS1 = Adafruit_MotorShield(0x61); 
 Adafruit_DCMotor *mtr1 = AFMS1.getMotor(1); // mtr1 is a pointer
 Adafruit_DCMotor *mtr2 = AFMS1.getMotor(2);
 Adafruit_DCMotor *mtr3 = AFMS1.getMotor(3);
 Adafruit_DCMotor *mtr4 = AFMS1.getMotor(4);
-// 4 more motors
+// another shield with up to 4 more motors
 Adafruit_MotorShield AFMS0 = Adafruit_MotorShield(0x60); 
 Adafruit_DCMotor *mtr5 = AFMS0.getMotor(1); // mtr5 is a pointer
 Adafruit_DCMotor *mtr6 = AFMS0.getMotor(2);
 Adafruit_DCMotor *mtr7 = AFMS0.getMotor(3);
 Adafruit_DCMotor *mtr8 = AFMS0.getMotor(4);
 
-int mtr = 0;
-int spd = 0;
-bool rev = false;
+int mtr = 0;  // ?
+int spd = 0;  // ?
 
-void SlaveInit(void) {
-  // Set MISO output, all others input
-  pinMode(SCK_PIN, INPUT);
-  pinMode(MOSI_PIN, INPUT);
-  //pinMode(MISO_PIN, OUTPUT);  // (only if bidirectional mode needed)
-  pinMode(SS_PIN, INPUT);
-
-  /*  Setup SPI control register SPCR
-  SPIE - Enables the SPI interrupt when 1
-  SPE - Enables the SPI when 1
-  DORD - Sends data least Significant Bit First when 1, most Significant Bit first when 0
-  MSTR - Sets the Arduino in master mode when 1, slave mode when 0
-  CPOL - Sets the data clock to be idle when high if set to 1, idle when low if set to 0
-  CPHA - Samples data on the trailing edge of the data clock when 1, leading edge when 0
-  SPR1 and SPR0 - Sets the SPI speed, 00 is fastest (4MHz) 11 is slowest (250KHz)   */
- 
-  // enable SPI subsystem and set correct SPI mode
-  // SPCR = (1<<SPE)|(0<<DORD)|(0<<MSTR)|(0<<CPOL)|(0<<CPHA)|(0<<SPR1)|(1<<SPR0);
+void SonarSensor(int trigPin,int echoPin)
+{
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  duration = pulseIn(echoPin, HIGH);
+  distance = (duration/2) / 29.1; // cm
 }
 
-// SPI status register: SPSR
-// SPI data register: SPDR
+void CommandWheels(int spd1, int spd2, int spd3, int spd4)
+{
+  if (spd1 < 0) {
+    mtr1->run(BACKWARD);
+  }
+  else {
+    mtr1->run(FORWARD);
+  }
+  if (spd2 < 0) {
+    mtr2->run(BACKWARD);
+  }
+  else {
+    mtr2->run(FORWARD);
+  }
+  if (spd3 < 0) {
+    mtr3->run(BACKWARD);
+  }
+  else {
+    mtr3->run(FORWARD);
+  }
+  if (spd4 < 0) {
+    mtr4->run(BACKWARD);
+  }
+  else {
+    mtr4->run(FORWARD);
+  }
+  if (spd1 > 255) {
+    spd1 = 255;
+  }
+  if (spd2 > 255) {
+    spd2 = 255;
+  }
+  if (spd3 > 255) {
+    spd3 = 255;
+  }
+  if (spd4 > 255) {
+    spd4 = 255;
+  }
+  if (spd1 < -255) {
+    spd1 = -255;
+  }
+  if (spd2 < -255) {
+    spd2 = -255;
+  }
+  if (spd3 < -255) {
+    spd3 = -255;
+  }
+  if (spd4 < -255) {
+    spd4 = -255;
+  }
+  mtr1->setSpeed(abs(spd1));
+  mtr2->setSpeed(abs(spd2));
+  mtr3->setSpeed(abs(spd3));
+  mtr4->setSpeed(abs(spd4));
+}
 
-// ================================================================
-// read in short as two bytes, with high-order byte coming in first
-// ================================================================
-unsigned short Read2Bytes(void) {
-  union {
-  unsigned short svar;
-  byte c[2];
-  } w;        // allow access to 2-byte word, or separate bytes
- 
-  while(!(SPSR & (1<<SPIF))) ; // SPIF bit set when 8 bits received
-  w.c[1] = SPDR;               // store high-order byte
-  while(!(SPSR & (1<<SPIF))) ; // SPIF bit set when 8 bits received
-  w.c[0] = SPDR;               // store low-order byte
-  return (w.svar); // send back unsigned short value
+void CommandRotor(int spd)
+{
+  if (spd < 0) {
+    mtr7->run(BACKWARD);
+  }
+  else {
+    mtr7->run(FORWARD);
+  }
+  if (spd > 255) {
+    spd = 255;
+  }
+  if (spd < -255) {
+    spd = -255;
+  }
+  mtr7->setSpeed(abs(spd));
+}
+
+// Split string into substrings, return substring by index
+String getSubString(String data, char separator, int index) {
+  int found = 0;
+  int strIndex[] = { 0, -1 };
+  int maxIndex = data.length() - 1;
+  for (int i = 0; i <= maxIndex && found <= index; i++) {
+    if (data.charAt(i) == separator || i == maxIndex) {
+      found++;
+      strIndex[0] = strIndex[1] + 1;
+      strIndex[1] = (i == maxIndex) ? i+1 : i;
+    }
+  }
+  return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
 }
 
 void setup()
 {
-  Serial.begin(115200); // For communication w/ controlling computer
-  Serial.setTimeout(50);
+  Serial.begin(9600); // For communication w/ controlling computer
+  Serial.setTimeout(10);
   while (!Serial) {
     ; // wait for serial port to connect.
   }
-  Serial.println("Hello from Arduino motorControl");
-  SlaveInit();  // set up SPI slave mode
+  Serial.println("Hello from Arduino :-)");
+  Serial.flush();
   AFMS0.begin();
   AFMS1.begin();
-  mtr1->setSpeed(0); // use '->' (not '.') because mtr1 is a pointer
-  mtr2->setSpeed(0);
-  mtr3->setSpeed(0);
-  mtr4->setSpeed(0);
+  // use mtrx->setSpeed (not mtrx.setSpeed) because mtrx is a pointer
+  mtr1->setSpeed(0); // wheel 1 motor
+  mtr2->setSpeed(0); // wheel 2 motor
+  mtr3->setSpeed(0); // wheel 3 motor
+  mtr4->setSpeed(0); // wheel 4 motor
   mtr5->setSpeed(0);
   mtr6->setSpeed(0);
   mtr7->setSpeed(0); // lidar rotor
   mtr8->setSpeed(0);
-  delay(10);
+
+  /* Initialise the HMC5883 sensor */
+  if(!mag.begin())
+  {
+    /* There was a problem detecting the HMC5883 ... check your connections */
+    Serial.println("Ooops, no HMC5883 detected ... Check your wiring!");
+    while(1);
+  }
+
+  /* Initialize pins for ultrasonic sensors */
+  pinMode(trigPin1, OUTPUT);
+  pinMode(echoPin1, INPUT);
+  pinMode(trigPin2, OUTPUT);
+  pinMode(echoPin2, INPUT);
+  pinMode(trigPin3, OUTPUT);
+  pinMode(echoPin3, INPUT);
 }
  
-// ============================================================
-// main loop: read in short word (2 bytes) from external SPI master
-// use low byte for speed; high byte for motor and fwd/rev.
-// On 16 MHz Arduino, works at > 500 words per second
-// ============================================================
 void loop() {
-  unsigned short word1;
-  byte flag1;
+  /*
+  // Get a new mag sensor event 
+  sensors_event_t event; 
+  mag.getEvent(&event);
+  
+  // Display the results (magnetic vector values are in micro-Tesla (uT)) 
+  // Serial.print("X: "); Serial.print(event.magnetic.x); Serial.print("  ");
+  // Serial.print("Y: "); Serial.print(event.magnetic.y); Serial.print("  ");
+  // Serial.print("Z: "); Serial.print(event.magnetic.z); Serial.print("  ");
+  // Serial.println("uT");
 
-  // SS_PIN = Digital_10 = ATmega328 Pin 16 =  PORTB.2
-  // Note: digitalRead() takes 4.1 microseconds
-  // NOTE: SS_PIN cannot be properly read this way while SPI module is active!
-  while (digitalRead(SS_PIN)==1) {} // wait until SlaveSelect goes low (active)
+  // Calculate heading when the magnetometer is level, then correct for signs of axis.
+  float heading = atan2(event.magnetic.y, event.magnetic.x);
+  // Once you have your heading, you must then add your 'Declination Angle',
+  // which is the difference betwee True North and the magnetic field in your location.
+  // Find yours here: http://www.magnetic-declination.com/
+  // If you cannot find your Declination, comment out these two lines, your compass will be slightly off.
+  float declinationAngle = 0.1067; // (-6 deg 7' W)
+  heading += declinationAngle;
+  
+  // Correct for non-linear heading values
+  heading = heading + .44 * cos((heading+.175))-.09;
+  
+  // Correct for when signs are reversed.
+  if(heading < 0)
+    heading += 2*PI;
+    
+  // Check for wrap due to addition of declination.
+  if(heading > 2*PI)
+    heading -= 2*PI;
    
-  SPCR = (1<<SPE)|(0<<DORD)|(0<<MSTR)|(0<<CPOL)|(0<<CPHA)|(0<<SPR1)|(1<<SPR0);  // SPI on
-  word1 = Read2Bytes();  // read unsigned short value
-  SPCR = (0<<SPE)|(0<<DORD)|(0<<MSTR)|(0<<CPOL)|(0<<CPHA)|(0<<SPR1)|(1<<SPR0);  // SPI off
- 
-  //    float seconds = millis()/1000.0;
-  //    time stamp takes more serial time, of course
-  //    Serial.print(seconds,3);  
-  //    Serial.print(",");
-  uint8_t low = word1 & 0xff;
-  uint8_t high = (word1 >> 8);
-  Serial.println();
-  Serial.print("high Byte: ");
-  Serial.println(high);
-  Serial.print("low Byte: ");
-  Serial.println(low);
-  mtr = (high & 0x7); // lowest 3 bits of upper byte
-  rev = (high & 0x8);  // 4th bit of upper byte (1 = reverse)
-  spd = low; // motor speed (0-255)
-  Serial.print("mtr: ");
-  Serial.print(mtr);
-  Serial.print("; speed: ");
-  Serial.print(spd);
-  Serial.print("; reverse?: ");
-  Serial.println(rev);
-  switch (mtr) {
-    case 1:
-      if (rev) {
-        mtr1->run(BACKWARD);
-      } else {
-        mtr1->run(FORWARD);
-      }
-      mtr1->setSpeed(spd);
-      break;
-    case 2:
-      if (rev) {
-        mtr2->run(BACKWARD);
-      } else {
-        mtr2->run(FORWARD);
-      }
-      mtr2->setSpeed(spd);
-      break;
-    case 3:
-      if (rev) {
-        mtr3->run(BACKWARD);
-      } else {
-        mtr3->run(FORWARD);
-      }
-      mtr3->setSpeed(spd);
-      break;
-    case 4:
-      if (rev) {
-        mtr4->run(BACKWARD);
-      } else {
-        mtr4->run(FORWARD);
-      }
-      mtr4->setSpeed(spd);
-      break;
-    case 5:
-      if (rev) {
-        mtr5->run(BACKWARD);
-      } else {
-        mtr5->run(FORWARD);
-      }
-      mtr5->setSpeed(spd);
-      break;
-    case 6:
-      if (rev) {
-        mtr6->run(BACKWARD);
-      } else {
-        mtr6->run(FORWARD);
-      }
-      mtr6->setSpeed(spd);
-      break;
-    case 7:
-      if (rev) {
-        mtr7->run(BACKWARD);
-      } else {
-        mtr7->run(FORWARD);
-      }
-      mtr7->setSpeed(spd);
-      break;
-    case 0:
-      if (rev) {
-        mtr8->run(BACKWARD);
-      } else {
-        mtr8->run(FORWARD);
-      }
-      mtr8->setSpeed(spd);
-      break;
-    default:
-      Serial.println("Something went wrong");
-      break;
+  // Convert radians to degrees for readability.
+  int headingDegrees = heading * 180/M_PI; 
+  
+  // Get ultrasonic sensor data.
+  SonarSensor(trigPin1, echoPin1);
+  RightSensor = distance;
+  SonarSensor(trigPin2, echoPin2);
+  LeftSensor = distance;
+  SonarSensor(trigPin3, echoPin3);
+  FrontSensor = distance;
+  */
+  if (Serial.available() > 0) {
+    // Read incoming string from RasPi
+    String inString = Serial.readString();
+    
+    // Send sensor data to RasPi
+    /*
+    Serial.print(LeftSensor);
+    Serial.print(",");
+    Serial.print(FrontSensor);
+    Serial.print(",");
+    Serial.print(RightSensor);
+    Serial.print(",");
+    Serial.println(headingDegrees);
+    */
+    
+    // Parse incoming data and command motors accordingly
+    String str0 = getSubString(inString, ',', 0);
+    String str1 = getSubString(inString, ',', 1);
+    String str2 = getSubString(inString, ',', 2);
+    String str3 = getSubString(inString, ',', 3);
+    String str4 = getSubString(inString, ',', 4);
+    String str5 = getSubString(inString, ',', 5);
+    int flag = str0.toInt();
+    int spd1 = str1.toInt();
+    int spd2 = str2.toInt();
+    int spd3 = str3.toInt();
+    int spd4 = str4.toInt();
+    int spd5 = str5.toInt();
+    Serial.println(inString);
+    Serial.flush();
+
+    if (flag == 1)
+    {
+      CommandWheels(spd1, spd2, spd3, spd4);
+    }
+    if (flag == 2)
+    {
+      CommandRotor(spd5);
+    }
   }
 }
