@@ -15,17 +15,17 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = omnicar.OmniCar()
 time.sleep(0.5)
-from_arduino = car.read_serial_data()
+from_arduino = car._read_serial_data()
 logger.debug(f"Message from Arduino: {from_arduino}")
 
 W2W_DIST = 34  # separation between coaxial wheels (cm)
 PAUSE = 0.05  # sec PAUSE time needed between wheel motor commands
-CLEARANCE = 60  # threshold min clearance to wall (cm)
+CLEARANCE = 70  # threshold min clearance to wall (cm)
 MIN_LENGTH = 20  # threshold min length to end of wall (cm)
 MIN_DIST = 40  # threshold min distance from car to wall (cm)
 KP = 0.25  # steering PID proportional coefficient
 KD = 0.3  # steering PID derivative coefficient
-CARSPEED = 60  # default car speed max=100, min=25
+CARSPEED = 60  # default car speed
 
 def relative_bearing(target):
     """Return 'relative' bearing of an 'absolute' target."""
@@ -227,14 +227,16 @@ def round_corner(speed, turn_radius):
 
 
 if __name__ == "__main__":
-    '''
+
     dist = approach_wall(CARSPEED, CLEARANCE)
     dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)
-    turn(90, dist)
+    radius_turn(90, dist)
     '''
-    data = car.go(60, 0)
+    #data = car.go(100, 0)
+    data = car.scan()
     print(f"'Sensor data' returned from car.go() command: {data}")
     time.sleep(1)
     data = car.stop_wheels()
     print(f"'Sensor data' returned from car.stop_wheels() command: {data}")
+    '''
     car.close()

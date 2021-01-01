@@ -85,7 +85,7 @@ class OmniCar():
 
         self.distance = 0  # last measured distance (cm) from lidar
         
-    def read_serial_data(self):
+    def _read_serial_data(self):
         line = "No serial data available"
         if ser0.in_waiting:
             in_bytes = ser0.readline()
@@ -102,7 +102,7 @@ class OmniCar():
 
 
     def _xfer_data(self, send_data):
-        """Xfer data w/ Arduino: Get sensor data, send motor spd values
+        """Xfer data w/ Arduino: Send motor spd values, get sensor data
 
         Send a tuple of 6 int values: (flag, m1, m2, m3, m4, m5)
         flag = 0 (ignore motor values, just get sensor data)
@@ -115,9 +115,9 @@ class OmniCar():
         out_string = ",".join(send_data_str)
         logger.debug(f"String being sent: {out_string}")
         ser0.write(out_string.encode())
-        time.sleep(.5)  # wait for incoming sensor data
+        time.sleep(.05)  # wait for incoming sensor data
         sensor_data = 1234
-        sensor_data = self.read_serial_data()
+        sensor_data = self._read_serial_data()
         logger.debug(f"serial data read: {sensor_data}")
         return sensor_data
 
@@ -161,8 +161,8 @@ class OmniCar():
         return heading_angle
 
     def go(self, speed, theta, spin=0):
-        """Drive at speed (0-100) in relative direction theta (rad)
-        while simultaneoulsy spinning CCW at rate = spin (0-100).
+        """Drive at speed (int) in relative direction theta (rad)
+        while simultaneoulsy spinning CCW at rate = spin (int).
         return sensor_data."""
 
         # convert from polar coordinates to omni_car's 'natural' coords
@@ -264,13 +264,13 @@ class OmniCar():
         enc_val = self.get_enc_val()
         # If scan rotor isn't near BDC (back dead cntr), go to BDC
         if enc_val > 3000:
-            self.scan_mtr_start(spd)
+            _ = self.scan_mtr_start(spd)
             while enc_val < 32767:  # continue as values increase to max
                 enc_val = self.get_enc_val()
             while enc_val == 32767:  # continue to back dead cntr
                 enc_val = self.get_enc_val()
         else:
-            self.scan_mtr_start(spd)
+            _ = self.scan_mtr_start(spd)
             enc_val = self.get_enc_val()
         last_time = time.time()
         data = []
@@ -283,7 +283,7 @@ class OmniCar():
                 last_time = now
                 data_item = (enc_val, self.distance, counter, delta_t)
                 data.append(data_item)
-        self.scan_mtr_stop()
+        _ = self.scan_mtr_stop()
         return data
 
     def close(self):
