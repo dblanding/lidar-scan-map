@@ -25,7 +25,7 @@ MIN_LENGTH = 20  # threshold min length to end of wall (cm)
 MIN_DIST = 40  # threshold min distance from car to wall (cm)
 KP = 0.25  # steering PID proportional coefficient
 KD = 0.3  # steering PID derivative coefficient
-CARSPEED = 60  # default car speed
+CARSPEED = 120  # default car speed
 
 def relative_bearing(target):
     """Return 'relative' bearing of an 'absolute' target."""
