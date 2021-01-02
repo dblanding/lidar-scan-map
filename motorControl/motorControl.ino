@@ -147,7 +147,7 @@ String getSubString(String data, char separator, int index) {
 void setup()
 {
   Serial.begin(9600); // For communication w/ controlling computer
-  Serial.setTimeout(10);
+  Serial.setTimeout(50);
   while (!Serial) {
     ; // wait for serial port to connect.
   }
@@ -165,13 +165,6 @@ void setup()
   mtr7->setSpeed(0); // lidar rotor
   mtr8->setSpeed(0);
 
-  /* Initialise the HMC5883 sensor */
-  if(!mag.begin())
-  {
-    /* There was a problem detecting the HMC5883 ... check your connections */
-    Serial.println("Ooops, no HMC5883 detected ... Check your wiring!");
-    while(1);
-  }
 
   /* Initialize pins for ultrasonic sensors */
   pinMode(trigPin1, OUTPUT);
@@ -183,62 +176,25 @@ void setup()
 }
  
 void loop() {
-  /*
-  // Get a new mag sensor event 
-  sensors_event_t event; 
-  mag.getEvent(&event);
-  
-  // Display the results (magnetic vector values are in micro-Tesla (uT)) 
-  // Serial.print("X: "); Serial.print(event.magnetic.x); Serial.print("  ");
-  // Serial.print("Y: "); Serial.print(event.magnetic.y); Serial.print("  ");
-  // Serial.print("Z: "); Serial.print(event.magnetic.z); Serial.print("  ");
-  // Serial.println("uT");
-
-  // Calculate heading when the magnetometer is level, then correct for signs of axis.
-  float heading = atan2(event.magnetic.y, event.magnetic.x);
-  // Once you have your heading, you must then add your 'Declination Angle',
-  // which is the difference betwee True North and the magnetic field in your location.
-  // Find yours here: http://www.magnetic-declination.com/
-  // If you cannot find your Declination, comment out these two lines, your compass will be slightly off.
-  float declinationAngle = 0.1067; // (-6 deg 7' W)
-  heading += declinationAngle;
-  
-  // Correct for non-linear heading values
-  heading = heading + .44 * cos((heading+.175))-.09;
-  
-  // Correct for when signs are reversed.
-  if(heading < 0)
-    heading += 2*PI;
-    
-  // Check for wrap due to addition of declination.
-  if(heading > 2*PI)
-    heading -= 2*PI;
-   
-  // Convert radians to degrees for readability.
-  int headingDegrees = heading * 180/M_PI; 
-  
   // Get ultrasonic sensor data.
   SonarSensor(trigPin1, echoPin1);
-  RightSensor = distance;
+  FrontSensor = distance;
   SonarSensor(trigPin2, echoPin2);
   LeftSensor = distance;
   SonarSensor(trigPin3, echoPin3);
-  FrontSensor = distance;
-  */
+  RightSensor = distance;
+
   if (Serial.available() > 0) {
     // Read incoming string from RasPi
     String inString = Serial.readString();
     
     // Send sensor data to RasPi
-    /*
-    Serial.print(LeftSensor);
-    Serial.print(",");
     Serial.print(FrontSensor);
     Serial.print(",");
-    Serial.print(RightSensor);
+    Serial.print(LeftSensor);
     Serial.print(",");
-    Serial.println(headingDegrees);
-    */
+    Serial.println(RightSensor);
+    Serial.flush(); // Waits for outgoing serial data to be sent
     
     // Parse incoming data and command motors accordingly
     String str0 = getSubString(inString, ',', 0);
@@ -253,9 +209,7 @@ void loop() {
     int spd3 = str3.toInt();
     int spd4 = str4.toInt();
     int spd5 = str5.toInt();
-    Serial.println(inString);
-    Serial.flush();
-
+    
     if (flag == 1)
     {
       CommandWheels(spd1, spd2, spd3, spd4);

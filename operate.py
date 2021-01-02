@@ -260,14 +260,19 @@ def round_corner(speed, turn_radius):
 
 
 if __name__ == "__main__":
-
+    data_str = car.get_sensor_data()
+    data = [int(item) for item in data_str.strip().split(',')]
+    print(data)  # front, right, left
+    print(f"Front dist = {data[0]}")
+    
+    '''
     square_to_wall()
 
     dist = approach_wall(CARSPEED, CLEARANCE)
 
     dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)
     radius_turn_on_the_go(90, dist)
-    '''
+    
     #data = car.go(100, 0)
     data = car.scan()
     print(f"'Sensor data' returned from car.go() command: {data}")

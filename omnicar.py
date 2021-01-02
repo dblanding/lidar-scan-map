@@ -2,7 +2,7 @@
 
 RasPi's only serial port used for bi-directional communication w/ Arduino.
  * All 5 motors are driven through 2 Adafruit Arduino motor shields.
- * HC-S04 ultrasonic sensors are attached to the Arduino.
+ * HC-S04 sonar sensors are attached to the Arduino.
  * scan rotor angle encoder data via ADC on RasPi I2C bus
  * HMC5883L compass on RasPi I2C bus
  * TFminiPlus lidar data attached to FT232 USB serial device 
@@ -19,7 +19,7 @@ import time
 import Adafruit_ADS1x15
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 adc = Adafruit_ADS1x15.ADS1115()
@@ -29,8 +29,8 @@ GAIN = 1  #ADC gain
 ports = ['/dev/ttyACM0', '/dev/ttyACM1']
 for port in ports:
     if os.path.exists(port):
-        ser0 = serial.Serial(port, 9600, timeout=.05)
-        ser0.flush()
+        ser0 = serial.Serial(port, 9600, timeout=0.5)
+        #ser0.flush()
         break
 logger.info(f"Serial port = {port}")
 
@@ -77,19 +77,20 @@ class OmniCar():
         
     def _read_serial_data(self):
         """Read and return one line from serial port"""
-        line = "No serial data available"
-        if ser0.in_waiting:
-            in_bytes = ser0.readline()
-            in_string = in_bytes.decode("utf-8")
-            line = in_string.strip().split(',')
+        in_string = None
+        while not in_string:
+            if ser0.in_waiting:
+                in_bytes = ser0.readline()
+                in_string = in_bytes.decode("utf-8")
+                #in_string.strip().split(',')
+                '''
+                try:
+                    read_line = ser0.read_until()   # byte type
+                    line = read_line.decode("utf-8").strip()
+                except UnicodeDecodeError:
+                    line = None
             '''
-            try:
-                read_line = ser0.read_until()   # byte type
-                line = read_line.decode("utf-8").strip()
-            except UnicodeDecodeError:
-                line = None
-            '''
-        return line
+        return in_string
 
 
     def _xfer_data(self, send_data):
@@ -104,10 +105,13 @@ class OmniCar():
         send_data_str = (str(item) for item in send_data)
         logger.debug(f"Data to send: {send_data}")
         out_string = ",".join(send_data_str)
+        out_string += '\n'
         logger.debug(f"String being sent: {out_string}")
         ser0.write(out_string.encode())
-        time.sleep(.05)  # wait for incoming sensor data
-        sensor_data = 1234
+        #ser0.flush()
+        time.sleep(.2)  # wait for incoming sensor data
+        #ser0.reset_input_buffer()
+        sensor_data = '1234'
         sensor_data = self._read_serial_data()
         logger.debug(f"serial data read: {sensor_data}")
         return sensor_data
@@ -201,9 +205,13 @@ class OmniCar():
         sensor_data = self._xfer_data((1, 0, 0, 0, 0, 0))
         return sensor_data
 
+    def get_sensor_data(self):
+        """Get sensor data from Arduino"""
+        sensor_data = self._xfer_data((0, 0, 0, 0, 0, 0))
+        return sensor_data
+
     def read_dist(self):
-        """
-        Set self.distance = distance (cm) read from LiDAR module.
+        """Set self.distance = distance (cm) read from LiDAR module.
         Return number of bytes that were waiting on serial port.
         """
         counter = ser1.in_waiting # bytes available on serial port
