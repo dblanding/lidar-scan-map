@@ -1,20 +1,12 @@
-"""This program accesses all the functions of the omni wheel car.
+"""This program accesses all the motors & sensors of the omni wheel car.
 
-  * Motor drive by command to the Arduino through SPI bus
-  * Access TFminiPlus data through serial port
-  * Access to rotary angle encoder through ADC on I2C bus
-  * Access to compass heading through HMC5883L on I2C bus
+RasPi's only serial port used for bi-directional communication w/ Arduino.
+ * All 5 motors are driven through 2 Adafruit Arduino motor shields.
+ * HC-S04 ultrasonic sensors are attached to the Arduino.
+ * scan rotor angle encoder data via ADC on RasPi I2C bus
+ * HMC5883L compass on RasPi I2C bus
+ * TFminiPlus lidar data attached to FT232 USB serial device 
 
-The TFminiPlus uses the RasPi's only serial bus for data transfer.
-Communication between the Arduino and the Adafruit motor shield (v2.3)
-uses the I2C bus.
-Attempts to set up the RasPi and Arduino communication over the I2C
-bus have been unsuccessful because it interferes with the Arduino
-to motor shield communication. To sidestep this problem, commands
-are sent from the Raspberry Pi to the Arduino on the SPI bus, with
-the Raspberry Pi configured as SPI master, and the Arduino as slave.
-
-Wheel motors:
 See omni-wheels.md for an explanation of wheel motor drive.
 """
 import logging
@@ -33,7 +25,7 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain
 
-# communicate with Arduino (bi-directional)
+#  For bi-directional communication with Arduino
 ports = ['/dev/ttyACM0', '/dev/ttyACM1']
 for port in ports:
     if os.path.exists(port):
@@ -42,7 +34,7 @@ for port in ports:
         break
 logger.info(f"Serial port = {port}")
 
-# get data from lidar module
+# For access to lidar distance sensor
 ser1 = serial.Serial("/dev/ttyUSB0", 115200)
 
 i2cbus = smbus.SMBus(1)
@@ -63,9 +55,7 @@ def convert_polar_to_rect(r, theta):
     return (x, y)
 
 class OmniCar():
-    """
-    Access all functions of omni-wheel car.
-    """
+    """Access all motors & sensors of omni-wheel car."""
 
     def __init__(self):
         """Configure HMC5883L, store most recent sensor data."""
@@ -86,6 +76,7 @@ class OmniCar():
         self.distance = 0  # last measured distance (cm) from lidar
         
     def _read_serial_data(self):
+        """Read and return one line from serial port"""
         line = "No serial data available"
         if ser0.in_waiting:
             in_bytes = ser0.readline()
@@ -102,9 +93,9 @@ class OmniCar():
 
 
     def _xfer_data(self, send_data):
-        """Xfer data w/ Arduino: Send motor spd values, get sensor data
+        """Xfer data to Arduino: Send motor spd values, get sensor data
 
-        Send a tuple of 6 int values: (flag, m1, m2, m3, m4, m5)
+        send_data is a tuple of 6 integers: (flag, m1, m2, m3, m4, m5)
         flag = 0 (ignore motor values, just get sensor data)
         flag = 1 (apply motor values m1 thru m4 and get sensor data)
         flag = 2 (apply motor value m5 and get sensor data)
@@ -122,7 +113,7 @@ class OmniCar():
         return sensor_data
 
     def read_raw_data(self, addr):
-        """Read from HMC5883L data registers"""
+        """Read raw data from HMC5883L data registers."""
 
         # Read raw 16-bit value
         high = i2cbus.read_byte_data(HMC5883_ADDRESS, addr)
@@ -172,11 +163,11 @@ class OmniCar():
         # motor numbers
         m1, m2, m3, m4 = (1, 2, 3, 4)
 
-        # convert 0-100 motor speed to 0-200 integer, adding spin
-        m1spd = int(spin + u) * 2
-        m2spd = int(spin - u) * 2
-        m3spd = int(spin - v) * 2
-        m4spd = int(spin + v) * 2
+        # combine motor speed with spin
+        m1spd = int(spin + u)
+        m2spd = int(spin - u)
+        m3spd = int(spin - v)
+        m4spd = int(spin + v)
 
         # friction keeps motors from running at speeds below ~50
         if 0 < m1spd < 50:
@@ -196,24 +187,6 @@ class OmniCar():
             m3spd = -50
         if -50 < m4spd < 0:
             m4spd = -50
-
-        # motors can't handle values > 255 or < -255
-        if m1spd > 255:
-            m1spd = 255
-        if m1spd < -255:
-            m1spd = -255
-        if m2spd > 255:
-            m2spd = 255
-        if m2spd < -255:
-            m2spd = -255
-        if m3spd > 255:
-            m3spd = 255
-        if m3spd < -255:
-            m3spd = -255
-        if m4spd > 255:
-            m4spd = 255
-        if m4spd < -255:
-            m4spd = -255
 
         sensor_data = self._xfer_data((1, m1spd, m2spd, m3spd, m4spd, 0))
         return sensor_data
