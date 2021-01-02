@@ -27,43 +27,57 @@ KP = 0.25  # steering PID proportional coefficient
 KD = 0.3  # steering PID derivative coefficient
 CARSPEED = 120  # default car speed
 
+def normalize_angle(angle):
+    """convert any value of angle to a value between 0-360."""
+    while angle < 0:
+        angle += 360
+    while angle > 360:
+        angle -= 360
+    return angle
+
 def relative_bearing(target):
     """Return 'relative' bearing of an 'absolute' target."""
     delta = target - 180
     rel_brng = car.heading() - delta
-    if rel_brng < 0:
-        rel_brng += 360
-    return rel_brng
+    return normalize_angle(rel_brng)
 
-def turn_to(target, spin_ratio):
-    """Turn to target heading (degrees)."""
-    trim = CARSPEED * spin_ratio
+def turn_to(target, spin_ratio=None):
+    """Turn to target course (degrees) either 'in place'
+    or 'while on the go' (using spin_ratio)."""
+    target = normalize_angle(target)
+    if spin_ratio:
+        trim = CARSPEED * spin_ratio
+
     # To avoid the complication of the 360 / 0 transition,
     # convert problem to one of aiming for a target at 180 degrees.
     rel_heading = relative_bearing(target)
     if rel_heading > 180:
-        car.go(CARSPEED, 0, spin=trim)
+        if spin_ratio:
+            car.go(CARSPEED, 0, spin=trim)
+        else:
+            car.spin(CARSPEED/2)
         while rel_heading > 180:
-            logger.debug(f"relative heading: {rel_heading}")
             rel_heading = relative_bearing(target)
             time.sleep(0.1)
     elif rel_heading < 180:
-        car.go(CARSPEED, 0, spin=trim)
+        if spin_ratio:
+            car.go(CARSPEED, 0, spin=trim)
+        else:
+            car.spin(-CARSPEED/2)
         while rel_heading < 180:
-            logger.debug(f"relative heading: {rel_heading}")
             rel_heading = relative_bearing(target)
             time.sleep(0.1)
     car.stop_wheels()
 
-def radius_turn(angle, turn_radius):
-    """Turn car angle degrees (CCW positive) at turn_radius (degrees)."""
+def radius_turn_on_the_go(angle, turn_radius):
+    """Turn car angle degrees (CCW positive) at turn_radius (cm)
+    while underway (turn_radius > 0)."""
     spin_ratio = (W2W_DIST / 2 / turn_radius) / math.sqrt(2)
     trim = CARSPEED * spin_ratio
-    start_heading = car.heading()
-    end_heading = start_heading - angle
-    if end_heading < 0:
-        end_heading += 360
-    turn_to(end_heading, spin_ratio)
+    target = angle - car.heading()
+    if target < 0:
+        target += 360
+    turn_to(target, spin_ratio)
 
 def r2p(xy_coords):
     """Convert rect coords (x, y) to polar (r, theta)
@@ -99,8 +113,25 @@ def get_indx_of_longest_line(line_params):
                 maxlen = length
     return indx
 
+def square_to_wall():
+    """Spin car to square to wall that is roughly in front."""
+
+    # get scan line(s)
+    data = car.scan(spd=180, lev=17500, hev=22500)
+    pscan = proscan.ProcessScan(data, gap=6)
+    line_params = pscan.get_line_parameters()
+    
+    # Examine first line found
+    coords, length, angle, dist = line_params[0]
+
+    # Turn in place
+    target = car.heading() - angle
+    turn_to(target)
+    logger.debug(f"heading = {car.heading()} degrees")
+
 def approach_wall(carspeed, clearance, mapping=False):
-    """Approach wall squarely at carspeed until distance to wall < clearance."""
+    """Approach wall squarely at carspeed until distance to wall < clearance.
+    trim course to maintain current compass heading."""
 
     # get scan line(s)
     data = car.scan(spd=180, lev=17500, hev=22500)
@@ -117,15 +148,15 @@ def approach_wall(carspeed, clearance, mapping=False):
     # OK to proceed?
     if dist > clearance:
         car.go(carspeed, math.pi/2)
-        logger.debug("")
-        logger.debug(f"Approach wall to dist < {clearance}.")
 
     # initialize steering variables
     trim = 3  # estimate of needed steering trim
-    target_angle = 0
-    prev_error = angle - target_angle
+    target_heading = car.heading()
+    prev_error = 0
     logger.debug("")
-    logger.debug(f"Dist\tAngle\tPterm\tDterm\ttrim")
+    logger.debug(f"Approach wall to dist < {clearance}, target heading = {int(target_heading)}")
+    logger.debug("")
+    logger.debug(f"Dist\tAngle\tPterm\tDterm\ttrim\tHeading")
 
     # continue toward wall
     while dist > clearance:
@@ -137,14 +168,15 @@ def approach_wall(carspeed, clearance, mapping=False):
         # Examine first line found
         coords, length, angle, dist = line_params[0]
         
-        # Adjust trim to maintain angle=target using pid feedback
-        error = angle - target_angle
-        p_term = error
-        d_term = error - prev_error
-        prev_error = error
+        # Adjust trim to maintain heading using pid feedback
+        hdg = car.heading()
+        heading_error = hdg - target_heading
+        p_term = heading_error
+        d_term = heading_error - prev_error
+        prev_error = heading_error
         adjustment = int((p_term * KP + d_term * KD))
         trim += adjustment
-        logger.debug(f"{int(dist)}\t{angle:.2f}\t{p_term:.2f}\t{d_term:.2f}\t{trim}")
+        logger.debug(f"{int(dist)}\t{angle:.2f}\t{p_term:.2f}\t{d_term:.2f}\t{trim}\t{int(hdg)}")
         car.go(carspeed, math.pi/2, spin=trim)
 
     car.stop_wheels()
@@ -171,15 +203,15 @@ def drive_along_wall_to_right(carspeed, clearance, mapping=False):
     # OK to proceed?
     if end_of_wall > EOW:
         car.go(carspeed, 0)
-        logger.debug("")
-        logger.debug(f"Drive right until end of wall < {EOW}")
 
     # initialize steering variables
     trim = 3  # estimate of needed steering trim
-    target_angle = 0
-    prev_error = angle - target_angle
+    target_heading = car.heading()
+    prev_error = 0
     logger.debug("")
-    logger.debug(f"Dist\tAngle\tEOW\tPterm\tDterm\ttrim")
+    logger.debug(f"Drive right until end of wall < {EOW}, target heading = {int(target_heading)}")
+    logger.debug("")
+    logger.debug(f"Dist\tAngle\tEOW\tPterm\tDterm\ttrim\tHeading")
 
     # continue to end of wall
     while end_of_wall > EOW:
@@ -193,14 +225,15 @@ def drive_along_wall_to_right(carspeed, clearance, mapping=False):
         coords, length, angle, dist = line_params[indx]
         end_of_wall = coords[-1][0]  # x coordinate of right end of wall
 
-        # Adjust trim to maintain angle=target using pid feedback
-        error = angle - target_angle
-        p_term = error
-        d_term = error - prev_error
-        prev_error = error
+        # Adjust trim to maintain heading using pid feedback
+        hdg = car.heading()
+        heading_error = hdg - target_heading
+        p_term = heading_error
+        d_term = heading_error - prev_error
+        prev_error = heading_error
         adjustment = int((p_term * KP + d_term * KD))
         trim += adjustment
-        logger.debug(f"{int(dist)}\t{angle:.2f}\t{end_of_wall:.2f}\t{p_term:.2f}\t{d_term:.2f}\t{trim}")
+        logger.debug(f"{int(dist)}\t{angle:.2f}\t{end_of_wall:.2f}\t{p_term:.2f}\t{d_term:.2f}\t{trim}\t{int(hdg)}")
         car.go(carspeed, 0, spin=trim)
 
     car.stop_wheels()
@@ -228,9 +261,12 @@ def round_corner(speed, turn_radius):
 
 if __name__ == "__main__":
 
+    square_to_wall()
+
     dist = approach_wall(CARSPEED, CLEARANCE)
+
     dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)
-    radius_turn(90, dist)
+    radius_turn_on_the_go(90, dist)
     '''
     #data = car.go(100, 0)
     data = car.scan()
