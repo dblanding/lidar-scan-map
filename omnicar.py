@@ -19,7 +19,7 @@ import time
 import Adafruit_ADS1x15
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 adc = Adafruit_ADS1x15.ADS1115()
@@ -55,10 +55,10 @@ def convert_polar_to_rect(r, theta):
     return (x, y)
 
 class OmniCar():
-    """Access all motors & sensors of omni-wheel car."""
+    """Control motors & access sensors of omni-wheel car."""
 
     def __init__(self):
-        """Configure HMC5883L, store most recent sensor data."""
+        """Configure HMC5883L (compass) & store most recent lidar value."""
 
         # write to Configuration Register A
         # average 8 samples per measurement output
@@ -75,21 +75,52 @@ class OmniCar():
 
         self.distance = 0  # last measured distance (cm) from lidar
         
+    def _read_raw_data(self, addr):
+        """Read raw data from HMC5883L data registers."""
+
+        # Read raw 16-bit value
+        high = i2cbus.read_byte_data(HMC5883_ADDRESS, addr)
+        low = i2cbus.read_byte_data(HMC5883_ADDRESS, addr+1)
+
+        # concatenate higher and lower value
+        value = ((high << 8) | low)
+
+        # get signed value from module
+        if value > 32768:
+            value = value - 65536
+        return value
+
+    def heading(self):
+        """Return magnetic compass heading of car (degrees)."""
+
+        # Read raw value
+        x = self._read_raw_data(X_AXIS_H)
+        z = self._read_raw_data(Z_AXIS_H)
+        y = self._read_raw_data(Y_AXIS_H)
+        # print(x, y, z)
+        # working in radians...
+        heading = math.atan2(y, x)
+
+        # calibration worked out experimentally
+        heading = heading + .44 * math.cos((heading + .175)) + .0175
+        heading = heading - math.pi / 2
+
+        # check for sign
+        if heading < 0:
+            heading += 2 * math.pi
+
+        # convert into angle
+        heading_angle = int(heading * 180 / math.pi)
+
+        return heading_angle
+
     def _read_serial_data(self):
         """Read and return one line from serial port"""
         in_string = None
         while not in_string:
             if ser0.in_waiting:
                 in_bytes = ser0.readline()
-                in_string = in_bytes.decode("utf-8")
-                #in_string.strip().split(',')
-                '''
-                try:
-                    read_line = ser0.read_until()   # byte type
-                    line = read_line.decode("utf-8").strip()
-                except UnicodeDecodeError:
-                    line = None
-            '''
+                in_string = in_bytes.decode("utf-8").rstrip()
         return in_string
 
 
@@ -111,54 +142,22 @@ class OmniCar():
         #ser0.flush()
         time.sleep(.2)  # wait for incoming sensor data
         #ser0.reset_input_buffer()
-        sensor_data = '1234'
-        sensor_data = self._read_serial_data()
-        logger.debug(f"serial data read: {sensor_data}")
-        return sensor_data
+        snsr_str = 'No sensor data'
+        snsr_str = self._read_serial_data()
+        logger.debug(f"serial data read: {snsr_str}")
+        distances = [int(item) for item in snsr_str.split(',')]
+        return distances
 
-    def read_raw_data(self, addr):
-        """Read raw data from HMC5883L data registers."""
-
-        # Read raw 16-bit value
-        high = i2cbus.read_byte_data(HMC5883_ADDRESS, addr)
-        low = i2cbus.read_byte_data(HMC5883_ADDRESS, addr+1)
-
-        # concatenate higher and lower value
-        value = ((high << 8) | low)
-
-        # get signed value from module
-        if value > 32768:
-            value = value - 65536
-        return value
-
-    def heading(self):
-        """Return magnetic compass heading of car (degrees)."""
-
-        # Read raw value
-        x = self.read_raw_data(X_AXIS_H)
-        z = self.read_raw_data(Z_AXIS_H)
-        y = self.read_raw_data(Y_AXIS_H)
-        # print(x, y, z)
-        # working in radians...
-        heading = math.atan2(y, x)
-
-        # calibration worked out experimentally
-        heading = heading + .44 * math.cos((heading + .175)) + .0175
-        heading = heading - math.pi / 2
-
-        # check for sign
-        if heading < 0:
-            heading += 2 * math.pi
-
-        # convert into angle
-        heading_angle = int(heading * 180 / math.pi)
-
-        return heading_angle
+    def get_sensor_data(self):
+        """Get sensor data from Arduino without affecting motors.
+        Return distances: [front_dist, left_dist, right_dist]"""
+        distances = self._xfer_data((0, 0, 0, 0, 0, 0))
+        return distances
 
     def go(self, speed, theta, spin=0):
         """Drive at speed (int) in relative direction theta (rad)
         while simultaneoulsy spinning CCW at rate = spin (int).
-        return sensor_data."""
+        Return distances: [front_dist, left_dist, right_dist]"""
 
         # convert from polar coordinates to omni_car's 'natural' coords
         # where one coaxial pair of wheels drives u and the other drives v
@@ -173,7 +172,7 @@ class OmniCar():
         m3spd = int(spin - v)
         m4spd = int(spin + v)
 
-        # friction keeps motors from running at speeds below ~50
+        # friction keeps motors from running smoothly at speeds below ~50
         if 0 < m1spd < 50:
             m1spd = 50
         if 0 < m2spd < 50:
@@ -192,26 +191,23 @@ class OmniCar():
         if -50 < m4spd < 0:
             m4spd = -50
 
-        sensor_data = self._xfer_data((1, m1spd, m2spd, m3spd, m4spd, 0))
-        return sensor_data
+        distances = self._xfer_data((1, m1spd, m2spd, m3spd, m4spd, 0))
+        return distances
     
     def spin(self, spd):
-        """Spin car (about its own axis) at speed = spd (-255 to +255) (CCW = +)."""
-        sensor_data = self._xfer_data((1, spd, spd, spd, spd, 0))
-        return sensor_data
+        """Spin car (about its own axis) at spd (int) (CCW = +)
+        Return distances: [front_dist, left_dist, right_dist]"""
+        distances = self._xfer_data((1, spd, spd, spd, spd, 0))
+        return distances
 
     def stop_wheels(self):
-        """Stop all wheel motors (mtr numbers: 1 thrugh 4)."""
-        sensor_data = self._xfer_data((1, 0, 0, 0, 0, 0))
-        return sensor_data
-
-    def get_sensor_data(self):
-        """Get sensor data from Arduino"""
-        sensor_data = self._xfer_data((0, 0, 0, 0, 0, 0))
-        return sensor_data
+        """Stop all wheel motors (mtr numbers: 1 thrugh 4).
+        Return distances: [front_dist, left_dist, right_dist]"""
+        distances = self._xfer_data((1, 0, 0, 0, 0, 0))
+        return distances
 
     def read_dist(self):
-        """Set self.distance = distance (cm) read from LiDAR module.
+        """Set self.distance = distance (cm) read from lidar module.
         Return number of bytes that were waiting on serial port.
         """
         counter = ser1.in_waiting # bytes available on serial port

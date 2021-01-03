@@ -20,7 +20,7 @@ logger.debug(f"Message from Arduino: {from_arduino}")
 
 W2W_DIST = 34  # separation between coaxial wheels (cm)
 PAUSE = 0.05  # sec PAUSE time needed between wheel motor commands
-CLEARANCE = 70  # threshold min clearance to wall (cm)
+CLEARANCE = 50  # threshold min clearance to wall (cm)
 MIN_LENGTH = 20  # threshold min length to end of wall (cm)
 MIN_DIST = 40  # threshold min distance from car to wall (cm)
 KP = 0.25  # steering PID proportional coefficient
@@ -38,46 +38,64 @@ def normalize_angle(angle):
 def relative_bearing(target):
     """Return 'relative' bearing of an 'absolute' target."""
     delta = target - 180
-    rel_brng = car.heading() - delta
+    logger.debug(f"heading: {car.heading()}")
+    rel_brng = int(car.heading() - delta)
     return normalize_angle(rel_brng)
 
-def turn_to(target, spin_ratio=None):
-    """Turn to target course (degrees) either 'in place'
-    or 'while on the go' (using spin_ratio)."""
+def turn_in_place(target):
+    """Turn (while stopped) toward target course (degrees)."""
     target = normalize_angle(target)
-    if spin_ratio:
-        trim = CARSPEED * spin_ratio
-
     # To avoid the complication of the 360 / 0 transition,
     # convert problem to one of aiming for a target at 180 degrees.
-    rel_heading = relative_bearing(target)
-    if rel_heading > 180:
-        if spin_ratio:
-            car.go(CARSPEED, 0, spin=trim)
-        else:
-            car.spin(CARSPEED/2)
-        while rel_heading > 180:
-            rel_heading = relative_bearing(target)
+    heading_error = relative_bearing(target) - 180
+    logger.debug(f"relative heading: {heading_error} deg")
+    while not -2 <= heading_error <= 2:
+        while heading_error > 2:
+            car.spin(50)
             time.sleep(0.1)
-    elif rel_heading < 180:
-        if spin_ratio:
-            car.go(CARSPEED, 0, spin=trim)
-        else:
-            car.spin(-CARSPEED/2)
-        while rel_heading < 180:
-            rel_heading = relative_bearing(target)
+            car.stop_wheels()
+            heading_error = relative_bearing(target) - 180
+            logger.debug(f"relative heading: {heading_error} deg")
+            time.sleep(0.2)
+        while heading_error < -2:
+            car.spin(-50)
+            time.sleep(0.1)
+            car.stop_wheels()
+            heading_error = relative_bearing(target) - 180
+            logger.debug(f"heading error: {heading_error} deg")
+            time.sleep(0.2)
+
+def _turn_on_the_go(target, direction, spin_ratio):
+    """Turn toward target course (degrees) while going in direction.
+    (For example, direction = math.pi/2 for straight ahead.)"""
+    target = normalize_angle(target)
+    trim = CARSPEED * spin_ratio
+    # To avoid the complication of the 360 / 0 transition,
+    # convert problem to one of aiming for a target at 180 degrees.
+    heading_error = relative_bearing(target) - 180
+    if heading_error > 0:
+        car.go(CARSPEED, direction, spin=trim)
+        while heading_error > 0:
+            logger.debug(f"relative heading: {int(heading_error)}")
+            heading_error = relative_bearing(target) - 180
+            time.sleep(0.1)
+    elif heading_error < 0:
+        car.go(CARSPEED, direction, spin=trim)
+        while heading_error < 0:
+            logger.debug(f"heading error: {int(heading_error)}")
+            heading_error = relative_bearing(target) - 180
             time.sleep(0.1)
     car.stop_wheels()
 
-def radius_turn_on_the_go(angle, turn_radius):
+def radius_turn_on_the_go(direction, angle, turn_radius):
     """Turn car angle degrees (CCW positive) at turn_radius (cm)
-    while underway (turn_radius > 0)."""
+    while underway in direction (eg: 0 or pi/2)."""
     spin_ratio = (W2W_DIST / 2 / turn_radius) / math.sqrt(2)
     trim = CARSPEED * spin_ratio
-    target = angle - car.heading()
+    target = car.heading() - angle
     if target < 0:
         target += 360
-    turn_to(target, spin_ratio)
+    _turn_on_the_go(target, direction, spin_ratio)
 
 def r2p(xy_coords):
     """Convert rect coords (x, y) to polar (r, theta)
@@ -102,18 +120,7 @@ def print_line_params(line_params):
         print(f"distance: {distance:.2f} cm")
         print()
 
-def get_indx_of_longest_line(line_params):
-    indx = 0
-    if len(line_params) > 1:
-        maxlen = 0
-        for n, line in enumerate(line_params):
-            coords, length, angle, dist = line
-            if length > maxlen:
-                indx = n
-                maxlen = length
-    return indx
-
-def square_to_wall():
+def square_to_wall(mapping=True):
     """Spin car to square to wall that is roughly in front."""
 
     # get scan line(s)
@@ -124,10 +131,30 @@ def square_to_wall():
     # Examine first line found
     coords, length, angle, dist = line_params[0]
 
-    # Turn in place
-    target = car.heading() - angle
-    turn_to(target)
+    # Examine first line found
+    coords, length, angle, dist = line_params[0]
+    logger.debug(f"angle = {angle} degrees")
     logger.debug(f"heading = {car.heading()} degrees")
+    target = car.heading() - angle
+    logger.debug(f"target = {target} degrees")
+    
+    # display and save initial map
+    if mapping:
+        pscan.map(nmbr=1, display_all_points=True)
+
+    # Turn in place
+    turn_in_place(target)
+    logger.debug(f"heading = {car.heading()} deg")
+    
+def longest_line(line_params):
+    max_len = 0
+    idx = 0
+    for n, line in enumerate(line_params):
+        coords, length, angle, dist = line
+        if length > max_len:
+            idx = n
+            max_len = length
+    return line_params[idx]
 
 def approach_wall(carspeed, clearance, mapping=False):
     """Approach wall squarely at carspeed until distance to wall < clearance.
@@ -137,9 +164,7 @@ def approach_wall(carspeed, clearance, mapping=False):
     data = car.scan(spd=180, lev=17500, hev=22500)
     pscan = proscan.ProcessScan(data, gap=6)
     line_params = pscan.get_line_parameters()
-    
-    # Examine first line found
-    coords, length, angle, dist = line_params[0]
+    coords, length, angle, dist = longest_line(line_params)
 
     # display and save initial map
     if mapping:
@@ -147,7 +172,7 @@ def approach_wall(carspeed, clearance, mapping=False):
 
     # OK to proceed?
     if dist > clearance:
-        car.go(carspeed, math.pi/2)
+        dist, *rest = car.go(carspeed, math.pi/2)
 
     # initialize steering variables
     trim = 3  # estimate of needed steering trim
@@ -156,18 +181,9 @@ def approach_wall(carspeed, clearance, mapping=False):
     logger.debug("")
     logger.debug(f"Approach wall to dist < {clearance}, target heading = {int(target_heading)}")
     logger.debug("")
-    logger.debug(f"Dist\tAngle\tPterm\tDterm\ttrim\tHeading")
-
+    logger.debug(f"Dist\tPterm\tDterm\ttrim\tHeading")
     # continue toward wall
     while dist > clearance:
-        # get scan line(s)
-        data = car.scan(spd=180, lev=17500, hev=22500)
-        pscan = proscan.ProcessScan(data, gap=6)
-        line_params = pscan.get_line_parameters()
-
-        # Examine first line found
-        coords, length, angle, dist = line_params[0]
-        
         # Adjust trim to maintain heading using pid feedback
         hdg = car.heading()
         heading_error = hdg - target_heading
@@ -176,8 +192,8 @@ def approach_wall(carspeed, clearance, mapping=False):
         prev_error = heading_error
         adjustment = int((p_term * KP + d_term * KD))
         trim += adjustment
-        logger.debug(f"{int(dist)}\t{angle:.2f}\t{p_term:.2f}\t{d_term:.2f}\t{trim}\t{int(hdg)}")
-        car.go(carspeed, math.pi/2, spin=trim)
+        logger.debug(f"{int(dist)}\t{p_term:.2f}\t{d_term:.2f}\t{trim}\t{int(hdg)}")
+        dist, *rest = car.go(carspeed, math.pi/2, spin=trim)
 
     car.stop_wheels()
 
@@ -190,10 +206,7 @@ def drive_along_wall_to_right(carspeed, clearance, mapping=False):
     data = car.scan(spd=180, lev=17500, hev=22500)
     pscan = proscan.ProcessScan(data, gap=5)
     line_params = pscan.get_line_parameters()
-
-    # find longest line 
-    indx = get_indx_of_longest_line(line_params)
-    coords, length, angle, dist = line_params[indx]
+    coords, length, angle, dist = longest_line(line_params)
     end_of_wall = coords[-1][0]  # x coordinate of right end of wall
 
     # display and save initial map
@@ -219,10 +232,7 @@ def drive_along_wall_to_right(carspeed, clearance, mapping=False):
         data = car.scan(spd=180, lev=17500, hev=22500)
         pscan = proscan.ProcessScan(data, gap=5)
         line_params = pscan.get_line_parameters()
-    
-        # find longest line 
-        indx = get_indx_of_longest_line(line_params)
-        coords, length, angle, dist = line_params[indx]
+        coords, length, angle, dist = longest_line(line_params)
         end_of_wall = coords[-1][0]  # x coordinate of right end of wall
 
         # Adjust trim to maintain heading using pid feedback
@@ -260,19 +270,15 @@ def round_corner(speed, turn_radius):
 
 
 if __name__ == "__main__":
-    data_str = car.get_sensor_data()
-    data = [int(item) for item in data_str.strip().split(',')]
-    print(data)  # front, right, left
-    print(f"Front dist = {data[0]}")
     
-    '''
     square_to_wall()
-
-    dist = approach_wall(CARSPEED, CLEARANCE)
-
-    dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)
-    radius_turn_on_the_go(90, dist)
     
+    dist = approach_wall(CARSPEED, CLEARANCE)
+    
+    dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)
+    
+    radius_turn_on_the_go(0, 90, CLEARANCE)
+    '''
     #data = car.go(100, 0)
     data = car.scan()
     print(f"'Sensor data' returned from car.go() command: {data}")

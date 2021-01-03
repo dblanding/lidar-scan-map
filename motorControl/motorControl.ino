@@ -179,21 +179,22 @@ void loop() {
   // Get ultrasonic sensor data.
   SonarSensor(trigPin1, echoPin1);
   FrontSensor = distance;
+  /*
   SonarSensor(trigPin2, echoPin2);
   LeftSensor = distance;
   SonarSensor(trigPin3, echoPin3);
   RightSensor = distance;
-
+  */
   if (Serial.available() > 0) {
     // Read incoming string from RasPi
     String inString = Serial.readString();
-    
+    delay(10);
     // Send sensor data to RasPi
     Serial.print(FrontSensor);
     Serial.print(",");
-    Serial.print(LeftSensor);
+    Serial.print("0"); //(LeftSensor);
     Serial.print(",");
-    Serial.println(RightSensor);
+    Serial.println("0"); //(RightSensor);
     Serial.flush(); // Waits for outgoing serial data to be sent
     
     // Parse incoming data and command motors accordingly
