@@ -37,7 +37,7 @@ Adafruit_DCMotor *mtr3 = AFMS1.getMotor(3);
 Adafruit_DCMotor *mtr4 = AFMS1.getMotor(4);
 // another shield with up to 4 more motors
 Adafruit_MotorShield AFMS0 = Adafruit_MotorShield(0x60); 
-Adafruit_DCMotor *mtr5 = AFMS0.getMotor(1); // mtr5 is a pointer
+Adafruit_DCMotor *mtr5 = AFMS0.getMotor(1);
 Adafruit_DCMotor *mtr6 = AFMS0.getMotor(2);
 Adafruit_DCMotor *mtr7 = AFMS0.getMotor(3);
 Adafruit_DCMotor *mtr8 = AFMS0.getMotor(4);
@@ -210,7 +210,6 @@ void loop() {
     int spd3 = str3.toInt();
     int spd4 = str4.toInt();
     int spd5 = str5.toInt();
-    
     if (flag == 1)
     {
       CommandWheels(spd1, spd2, spd3, spd4);
@@ -219,5 +218,9 @@ void loop() {
     {
       CommandRotor(spd5);
     }
+  }
+  if (FrontSensor <= 10)
+  {
+    CommandWheels(0, 0, 0, 0);
   }
 }

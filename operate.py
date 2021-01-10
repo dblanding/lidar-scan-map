@@ -268,9 +268,76 @@ def round_corner(speed, turn_radius):
     car.go(speed, 0, spin=trim)
     car.stop_wheels()
 
+def save_scandata_as_csv(data, filename):
+    write_data = []
+    for line in data:
+        ev, dist, _, _ = line
+        str_to_write = ','.join((str(ev), str(dist))) + '\n'
+        write_data.append(str_to_write)
+    with open(filename, 'w') as f:
+        f.writelines(write_data)
+
+def find_clear_path(data, thresh=None):
+    """Find widest open sector. Return rel heading and distance to go.
+
+    Do this by finding all contiguous regions with dist values
+    equal to zero or greater than thresh * max_dist.
+    """
+    if not thresh:
+        thresh = 0.6
+
+    # find max_dist
+    max_dist = 0
+    for record in data:
+        enc_val, dist, _, _ = record
+        if dist > max_dist:
+            max_dist = dist
+
+    # generate overlay list, with 1 for open, 0 for not open
+    overlay = []
+    for record in data:
+        enc_val, dist, _, _ = record
+        if dist >= max_dist * thresh or dist == 0:
+            overlay.append(1)
+        else:
+            overlay.append(0)
+
+    # look for 'clumps' of contiguous open indexes
+    open_clumps = []  # (start index, end_index)
+    curr_state = False  # True is open
+    for n, val in enumerate(overlay):
+        if not curr_state and val:  # start of an open region
+            curr_state = True
+            start_index = n
+        elif curr_state and not val:  # end of an open region
+            curr_state = False
+            open_clumps.append((start_index, n))
+    print(f"open_clumps: {open_clumps}")
+
+    # find largest clump
+    maxlen = 0
+    widest = None
+    for n, clump in enumerate(open_clumps):
+        length = clump[-1] - clump[0]
+        if length > maxlen:
+            maxlen = length
+            widest = clump
+
+    # find enc_val if center of clump, dist to drive
+    start_record = data[widest[0]]
+    end_record = data[widest[-1]]
+    start_enc_val, start_dist, _, _ = start_record
+    end_enc_val, end_dist, _, _ = end_record
+    avg_enc_val = (start_enc_val + end_enc_val) / 2
+    stop_dist = (start_dist + end_dist) / 2
+    print(avg_enc_val, stop_dist)
+
+    # convert enc_val to relative heading (straight ahead = 0 deg)
+    rel_heading = (avg_enc_val - 20000) * 90 / 10000
+    return (rel_heading, stop_dist)
 
 if __name__ == "__main__":
-    
+    '''
     square_to_wall()
     
     dist = approach_wall(CARSPEED, CLEARANCE)
@@ -278,7 +345,7 @@ if __name__ == "__main__":
     dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)
     
     radius_turn_on_the_go(0, 90, CLEARANCE)
-    '''
+    
     #data = car.go(100, 0)
     data = car.scan()
     print(f"'Sensor data' returned from car.go() command: {data}")
@@ -286,4 +353,17 @@ if __name__ == "__main__":
     data = car.stop_wheels()
     print(f"'Sensor data' returned from car.stop_wheels() command: {data}")
     '''
+    while True:
+        print(f"Car heading = {car.heading()}")
+        data = car.scan()
+        save_scandata_as_csv(data, 'scan_data.csv')
+        rel_heading, dist_to_go = find_clear_path(data)
+        print(f"relative heading: {rel_heading}, distance to drive: {dist_to_go}")
+        pscan = proscan.ProcessScan(data, gap=15)
+        pscan.map(nmbr=1, display_all_points=True)
+        turn_in_place(car.heading() + rel_heading)
+        car.go(150, math.pi/2, spin=5)
+        # goes 64 inches (162 cm) in 10 sec @ spd = 150
+        time.sleep(dist_to_go / 16)
+        car.stop_wheels()
     car.close()

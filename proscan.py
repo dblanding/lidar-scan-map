@@ -125,7 +125,7 @@ class ProcessScan():
         for item in data:
             enc_cnt = item[0]
             dist = item[1]
-            if dist and dist != 1200:
+            if dist and dist <= 1200:
                 pnt = Point(dist, enc_cnt)
                 self.points.append(pnt)
 
