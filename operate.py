@@ -277,6 +277,20 @@ def save_scandata_as_csv(data, filename):
     with open(filename, 'w') as f:
         f.writelines(write_data)
 
+def find_std_dev(datalist):
+    # Standard deviation of list 
+    # Using sum() + list comprehension 
+    mean = sum(datalist) / len(datalist) 
+    variance = sum([((x - mean) ** 2) for x in datalist]) / len(datalist) 
+    std_dev = variance ** 0.5
+    return mean, std_dev
+
+def find_outliers(datalist):
+    mean, std_dev = find_std_dev(datalist)
+    upper_threshold = mean + (3 * std_dev)
+    outliers = [value for value in datalist if value > upper_threshold]
+    return outliers
+
 def find_clear_path(data, thresh=None):
     """Find widest open sector. Return rel heading and distance to go.
 
@@ -288,10 +302,14 @@ def find_clear_path(data, thresh=None):
 
     # find max_dist
     max_dist = 0
+    distlist = []  # list of dist values
     for record in data:
         enc_val, dist, _, _ = record
         if dist > max_dist:
             max_dist = dist
+        distlist.append(dist)
+    outliers = find_outliers(distlist)
+    print(f"outliers: {outliers}")
 
     # generate overlay list, with 1 for open, 0 for not open
     overlay = []
@@ -333,11 +351,11 @@ def find_clear_path(data, thresh=None):
     print(avg_enc_val, stop_dist)
 
     # convert enc_val to relative heading (straight ahead = 0 deg)
-    rel_heading = (avg_enc_val - 20000) * 90 / 10000
+    rel_heading = (avg_enc_val - omnicar.MEV) * 90 / omnicar.MEV
     return (rel_heading, stop_dist)
 
 if __name__ == "__main__":
-    '''
+    
     square_to_wall()
     
     dist = approach_wall(CARSPEED, CLEARANCE)
@@ -356,14 +374,16 @@ if __name__ == "__main__":
     while True:
         print(f"Car heading = {car.heading()}")
         data = car.scan()
+        print(f"total number of points: {len(data)}")
         save_scandata_as_csv(data, 'scan_data.csv')
         rel_heading, dist_to_go = find_clear_path(data)
         print(f"relative heading: {rel_heading}, distance to drive: {dist_to_go}")
         pscan = proscan.ProcessScan(data, gap=15)
         pscan.map(nmbr=1, display_all_points=True)
         turn_in_place(car.heading() + rel_heading)
-        car.go(150, math.pi/2, spin=5)
+        car.go(100, math.pi/2, spin=5)
         # goes 64 inches (162 cm) in 10 sec @ spd = 150
         time.sleep(dist_to_go / 16)
         car.stop_wheels()
+    '''
     car.close()

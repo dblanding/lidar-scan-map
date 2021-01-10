@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
+LEV = 10000  # Low Encoder Value (car -X direction)
+MEV = 19680  # Mid Encoder Value (car +Y direction)
+HEV = 29360  # High Encoder Value (car +X direction)
+
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain
 
@@ -233,7 +237,7 @@ class OmniCar():
         """Turn scan motor off."""
         sensor_data = self._xfer_data((2, 0, 0, 0, 0, 0))
 
-    def scan(self, spd=200, lev=10000, hev=30000):
+    def scan(self, spd=200, lev=LEV, hev=HEV):
         """Run scan mtr at spd (100-255) and return list of tuples of
         scan data for encoder values between lev (low encoder value) and
         hev (high encoder value).
@@ -253,7 +257,7 @@ class OmniCar():
         data = []
         while enc_val < 32767:  # continue as values increase to max
             enc_val = self.get_enc_val()
-            if lev < enc_val < hev:  # 20000 is 'straight ahead'
+            if lev < enc_val < hev:
                 counter = self.read_dist()
                 now = time.time()
                 delta_t = str(now - last_time)

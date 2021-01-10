@@ -2,6 +2,7 @@ import logging
 import math
 import matplotlib.pyplot as plt
 from matplotlib import style
+import omnicar
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
@@ -59,8 +60,6 @@ class Point():
         self.xy = xy  # (x, y) coordinates
 
 # Default values used in ProcessScan
-LEV = 10000  # Start of sector (Low Encoder Value)
-HEV = 30000  # End of sector (High Encoder Value)
 GAP = 5
 CORNER = 7
 HOOK = 2
@@ -83,11 +82,11 @@ class ProcessScan():
         if lev:
             self.LEV = lev
         else:
-            self.LEV = LEV
+            self.LEV = omnicar.LEV
         if hev:
             self.HEV = hev
         else:
-            self.HEV = HEV
+            self.HEV = omnicar.HEV
         if gap:
             self.GAP = gap
         else:
