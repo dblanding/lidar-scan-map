@@ -351,11 +351,11 @@ def find_clear_path(data, thresh=None):
     print(avg_enc_val, stop_dist)
 
     # convert enc_val to relative heading (straight ahead = 0 deg)
-    rel_heading = (avg_enc_val - omnicar.MEV) * 90 / omnicar.MEV
+    rel_heading = (avg_enc_val - omnicar.MEV) * 90 / (omnicar.MEV - omnicar.LEV)
     return (rel_heading, stop_dist)
 
 if __name__ == "__main__":
-    
+    '''
     square_to_wall()
     
     dist = approach_wall(CARSPEED, CLEARANCE)
@@ -370,7 +370,7 @@ if __name__ == "__main__":
     time.sleep(1)
     data = car.stop_wheels()
     print(f"'Sensor data' returned from car.stop_wheels() command: {data}")
-    '''
+    
     while True:
         print(f"Car heading = {car.heading()}")
         data = car.scan()
@@ -386,4 +386,9 @@ if __name__ == "__main__":
         time.sleep(dist_to_go / 16)
         car.stop_wheels()
     '''
+    data = car.scan(spd=90)
+    print(f"total number of points: {len(data)}")
+    save_scandata_as_csv(data, 'scan_data.csv')
+    pscan = proscan.ProcessScan(data, gap=15, crnr=10)
+    pscan.map(nmbr=1, display_all_points=True)  
     car.close()
