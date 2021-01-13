@@ -23,8 +23,8 @@ logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 LEV = 10000  # Low Encoder Value (car -X direction)
-MEV = 19680  # Mid Encoder Value (car +Y direction)
-HEV = 29360  # High Encoder Value (car +X direction)
+MEV = 20000  #19680  # Mid Encoder Value (car +Y direction)
+HEV = 30000  #29360  # High Encoder Value (car +X direction)
 
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain

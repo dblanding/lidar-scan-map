@@ -2,7 +2,7 @@ import logging
 import math
 import matplotlib.pyplot as plt
 from matplotlib import style
-import omnicar
+import omnicar as oc
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
@@ -48,6 +48,38 @@ def p2line_dist(pt, line):
     p0 = proj_pt_on_line(line, pt)
     return p2p_dist(pt, p0)
 
+def group(data):
+    """lidar has the habit of producing repeated distance values for
+    adjacent points, 'triplets' being common, occasionally 'twins'.
+    This function groups adjacent points with the same dist value
+    into groups of triplets or twins."""
+    group = []
+    grouped_data = []
+    for record in data:
+        if not group:  # Initial pass through for loop
+            dist = record[1]
+            group.append(record[:2])
+        elif len(group) == 3:  # cap group size at 3
+            grouped_data.append(group)
+            dist = record[1]
+            group = [record[:2]]
+        elif dist == record[1]:
+            group.append(record[:2])
+        else:
+            grouped_data.append(group)
+            dist = record[1]
+            group = [record[:2]]
+    grouped_data.append(group)  # append final group
+    return grouped_data
+
+def cull_repeats(grouped_data):
+    """Filters all but one from each group of triplets or twins."""
+    thindata = []
+    for group in grouped_data:
+        idx = len(group) // 2  # index of record to keep
+        thindata.append(group[idx])
+    return thindata
+
 
 class Point():
     """Convenience structure encapsulating data point measured values
@@ -58,6 +90,7 @@ class Point():
         self.enc_val = enc_val  # angle encoder value (int)
         self.theta = theta  # (derived) float angle wrt car (radians)
         self.xy = xy  # (x, y) coordinates
+
 
 # Default values used in ProcessScan
 GAP = 5
@@ -82,11 +115,11 @@ class ProcessScan():
         if lev:
             self.LEV = lev
         else:
-            self.LEV = omnicar.LEV
+            self.LEV = oc.LEV
         if hev:
             self.HEV = hev
         else:
-            self.HEV = omnicar.HEV
+            self.HEV = oc.HEV
         if gap:
             self.GAP = gap
         else:
@@ -107,21 +140,22 @@ class ProcessScan():
 
     def _generate_points(self, data):
         """
-        Convert raw data (list) to points.
-
+        Thin raw data by culling adjacent records with same distance value.
         Each item of data contains 4 values:
         encoder_count, distance, byte_count, delta_time.
         Populate self.points list with Point objects,
         removing any whose distance value is 0 or 1200.
 
-        enc_cnt (encoder count) values start at 0 (straight behind)
+        enc_cnt (encoder count) values start at 0 
         and increase with CW rotation.
-        straight left: enc_val = 10,000; theta = pi
-        straight ahead: enc_val = 20,000; theta = pi/2
-        straight right: enc_val = 30,000; theta = 0
+        straight left: enc_val = self.LEV; theta = pi
+        straight ahead: enc_val = self.MEV; theta = pi/2
+        straight right: enc_val = self.HEV; theta = 0
         (enc_cnt tops out at 32765, so no info past that)
         """
-        for item in data:
+        grouped_data = group(data)
+        thindata = cull_repeats(grouped_data)
+        for item in thindata:
             enc_cnt = item[0]
             dist = item[1]
             if dist and dist <= 1200:
@@ -130,7 +164,8 @@ class ProcessScan():
 
         # calculate 'theta' value of each point (for polar coords)
         for pnt in self.points:
-            theta = 1.5 * math.pi * (1 - (pnt.enc_val / 30000))
+            #theta = math.pi * 1.5 * (1 - (pnt.enc_val / 30000))
+            theta = (self.HEV - pnt.enc_val) * math.pi / (self.HEV - self.LEV)
             pnt.theta = theta
 
         # convert polar coords (dist, theta) to (x, y) coords

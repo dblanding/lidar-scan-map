@@ -386,7 +386,9 @@ if __name__ == "__main__":
         time.sleep(dist_to_go / 16)
         car.stop_wheels()
     '''
-    data = car.scan(spd=90)
+    data = car.scan(spd=150)
+    with open('scan_data.pkl', 'wb') as f:
+        pickle.dump(data, f)
     print(f"total number of points: {len(data)}")
     save_scandata_as_csv(data, 'scan_data.csv')
     pscan = proscan.ProcessScan(data, gap=15, crnr=10)
