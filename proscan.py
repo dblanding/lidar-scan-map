@@ -95,7 +95,7 @@ class Point():
 
 
 # Default values used in ProcessScan
-GAP = 10
+GAP = 12
 CORNER = 10
 HOOK = 2
 
@@ -176,6 +176,17 @@ class ProcessScan():
             y = pnt.dist * math.sin(pnt.theta)
             pnt.xy = (x, y)
 
+    def find_local_min(self, indx0, indx1):
+        """Find local min value of distance between indx0 & indx1."""
+        mindist = None
+        for pnt in self.points:
+            dist = pnt.dist
+            if not mindist or dist < mindist:
+                mindist = dist
+        min_indx_list = [indx for indx, pnt in enumerate(self.points)
+                         if pnt.dist <= mindist+1]
+        return min_indx_list
+
     def _generate_regions(self):
         """Find continuous regions of closely spaced points (clumps)
         Large gaps (dist to neighbor > gap) represent 'edges' of regions.
@@ -204,12 +215,16 @@ class ProcessScan():
         # Cull tiny regions
         self._cull_regions()
 
+        # find local minimum in region 1
+        local_min_list = self.find_local_min(6, 50)
+        print(local_min_list)
+
         # Find corners
-        pass_nr = 0
-        while self._find_corners():
-            pass_nr += 1
-            logger.debug(f"Looking for corners, pass {pass_nr}")
-            logger.debug(f"Regions: {self.regions}")
+        #pass_nr = 0
+        #while self._find_corners():
+        #   pass_nr += 1
+        #   logger.debug(f"Looking for corners, pass {pass_nr}")
+        #   logger.debug(f"Regions: {self.regions}")
         # Remove hooked ends from segments Todo: get this working better
         # self._remove_hooks()
 
@@ -230,6 +245,33 @@ class ProcessScan():
             if region[0] == region[-1]:
                 self.regions.remove(region)
                 logger.debug("Removed a region with only 1 point")
+
+    def find_sum_of_sq_dist_to_line(self, line, indx0, indx1):
+        """
+        Return sum of squares of distances between line (a, b, c)
+        and a series of adjacent points from indx0 to indx1.
+        """
+        cum_dist = 0  # cumulative distance
+        cum_dsqr = 0  # cumulative distance squared
+        n = 0
+        for idx in range(indx0, indx1):
+            pnt = self.points[idx].xy
+            dist = p2line_dist(pnt, line)
+            dsqr = dist * dist
+            cum_dist += dist
+            cum_dsqr += dsqr
+            n += 1
+        avg_dist = cum_dist / n
+        return (avg_dist, cum_dsqr)
+
+    def find_p2p_angles_of_pnts(self, indx0, indx1):
+        """ """
+        indexlist = [indx for indx in range(indx0, indx1)]
+        slopelist = []
+        for indx in indexlist:
+            slope = proscan.p2p_angle(points[indx].xy, points[indx + 1].xy)
+            slopelist.append(slope)
+        return zip(indexlist, slopelist)
 
     def _find_corners(self):
         """
@@ -276,7 +318,7 @@ class ProcessScan():
                     if region[0] < corner_index < region[-1]:
                         start, end = self.regions.pop(n)
                         self.regions.insert(n, (start, corner_index))
-                        self.regions.insert(n+1, (corner_index+1, end))
+                        self.regions.insert(n+1, (corner_index, end))
         return found
 
     def _remove_hooks(self):
