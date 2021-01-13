@@ -391,6 +391,6 @@ if __name__ == "__main__":
         pickle.dump(data, f)
     print(f"total number of points: {len(data)}")
     save_scandata_as_csv(data, 'scan_data.csv')
-    pscan = proscan.ProcessScan(data, gap=15, crnr=10)
+    pscan = proscan.ProcessScan(data)
     pscan.map(nmbr=1, display_all_points=True)  
     car.close()

@@ -2,10 +2,12 @@ import logging
 import math
 import matplotlib.pyplot as plt
 from matplotlib import style
+import sys
 import omnicar as oc
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.addHandler(logging.StreamHandler(sys.stdout))
 
 style.use('fivethirtyeight')
 
@@ -93,8 +95,8 @@ class Point():
 
 
 # Default values used in ProcessScan
-GAP = 5
-CORNER = 7
+GAP = 10
+CORNER = 10
 HOOK = 2
 
 
@@ -190,13 +192,14 @@ class ProcessScan():
                 dist = p2p_dist(pnt.xy, self.points[n-1].xy)
             elif pnt.enc_val > self.HEV:
                 break
-            if dist > self.GAP:
+            if dist > self.GAP * pnt.dist / 100:
                 if n > (start_index + 1):
                     regions.append((start_index, n-1))
                 start_index = n
         if n != start_index:
             regions.append((start_index, n))  # add last region
         self.regions = regions
+        logger.debug(f"Regions: {self.regions}")
 
         # Cull tiny regions
         self._cull_regions()
@@ -207,7 +210,6 @@ class ProcessScan():
             pass_nr += 1
             logger.debug(f"Looking for corners, pass {pass_nr}")
             logger.debug(f"Regions: {self.regions}")
-
         # Remove hooked ends from segments Todo: get this working better
         # self._remove_hooks()
 
@@ -275,6 +277,7 @@ class ProcessScan():
                         start, end = self.regions.pop(n)
                         self.regions.insert(n, (start, corner_index))
                         self.regions.insert(n+1, (corner_index+1, end))
+        return found
 
     def _remove_hooks(self):
         """Remove the end point(s) of a region if they 'hook' off base line.
@@ -357,7 +360,7 @@ class ProcessScan():
             y_vals = [pnt1[1], pnt2[1]]
             line_coords.append((pnt1, pnt2))
             plt.plot(x_vals, y_vals)
-        logger.debug(line_coords)
+        #logger.debug(line_coords)
 
         plt.axis('equal')
         plt.savefig(imagefile)
