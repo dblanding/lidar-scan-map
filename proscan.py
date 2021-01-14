@@ -6,7 +6,7 @@ import sys
 import omnicar as oc
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 style.use('fivethirtyeight')
@@ -215,16 +215,15 @@ class ProcessScan():
         # Cull tiny regions
         self._cull_regions()
 
-        # find local minimum in region 1
-        local_min_list = self.find_local_min(6, 50)
-        print(local_min_list)
-
         # Find corners
-        #pass_nr = 0
-        #while self._find_corners():
-        #   pass_nr += 1
-        #   logger.debug(f"Looking for corners, pass {pass_nr}")
-        #   logger.debug(f"Regions: {self.regions}")
+        # pop region1, split it and put back it back with corners
+        region1 = self.regions.pop()
+        corners = self._find_corners(region1)
+        newregions = [(region1[0], corners[0]),
+                      corners,
+                      (corners[1], region1[1])]
+        self.regions.extend(newregions)
+
         # Remove hooked ends from segments Todo: get this working better
         # self._remove_hooks()
 
@@ -273,53 +272,70 @@ class ProcessScan():
             slopelist.append(slope)
         return zip(indexlist, slopelist)
 
-    def _find_corners(self):
+    def _find_corners(self, region):
         """
         If the points in a continuous region are substantially straight &
         linear, they can be well represented by a straight line segment
         between the start and end points of the region.
-        However, if the points trace an 'L' shape, as they would where two
-        walls meet at a corner, two straight line segments would be needed,
-        with the two segments meeting at the corner.
-        To find a corner in a region, look for the point at the greatest
-        distance from the straight line joining the region end points.
-        Only one corner is found at a time. To find multiple corners in a
-        region (a zig-zag shaped wall, for example) make multiple passes.
+        However, if the points trace an 'L' or "U" shape, as they would where
+        walls meet at corners, multiple straight line segments would be needed,
+        with line segments meeting at corners.
+        One way to find a corner is to find the intersection of 2 straight
+        line segments. if there is an area where the points are spaced
+        most closely together, this will be a section of wall whose distance
+        to the robot is a local minimum. The robot is looking squarely at this
+        area, so the distance values will be more reliable than for areas
+        being measured more obliquely. Test to see if this is a straight
+        section of wall by checking the fit between the line joining the two
+        end points of the area with all the points between the end points.
+        If the fit is good, gradually extend the length of the area and keep
+        checking the fit of the line with the points. When the line cannot
+        be made any longer and still have a good fit, a corner has been found.
+        Return a tuple of indexes of the corners."""
 
-        Within each continuous region, find index and value of data point
-        located farthest from the end_to_end line segment if value > CORNERS.
-        If index found, split region(s) at index.
-        """
-        corners = []
-        found = False
-        for region in self.regions:
-            max_dist = 0
-            max_idx = 0
-            idx1 = region[0]
-            idx2 = region[-1]
-            p1 = (self.points[idx1].xy)
-            p2 = (self.points[idx2].xy)
-            line = cnvrt_2pts_to_coef(p1, p2)
-            for n in range(idx1, idx2):
-                pnt = (self.points[n].xy)
-                dist = p2line_dist(pnt, line)
-                if dist > max_dist:
-                    max_dist = dist
-                    max_idx = n
-            if max_dist > self.CORNER:
-                corners.append(max_idx)
-        # Insert found corners into regions. Start with high values of index
-        # first to avoid problems when popping and inserting into regions.
-        if corners:
-            found = True
-            corners.reverse()
-            for corner_index in corners:
-                for n, region in enumerate(self.regions):
-                    if region[0] < corner_index < region[-1]:
-                        start, end = self.regions.pop(n)
-                        self.regions.insert(n, (start, corner_index))
-                        self.regions.insert(n+1, (corner_index, end))
-        return found
+        idx0, idx1 = region
+        # find local minimum in region
+        local_min_list = self.find_local_min(idx0, idx1)
+        print(local_min_list)
+
+        indx0 = local_min_list[0]
+        indx1 = local_min_list[-1]
+        avg_dist = 0
+        while avg_dist < 3:
+            indx1 += 1
+            line = cnvrt_2pts_to_coef(self.points[indx0].xy,
+                                      self.points[indx1].xy)
+            avg_dist, cum_dsqr = self.find_sum_of_sq_dist_to_line(line, indx0, indx1)
+            '''
+            print(f"Between index {indx0} and {indx1}:")
+            print(f"Average pnt-to-line distance is {avg_dist}")
+            print(f"Sum of square of distance is {cum_dsqr}")
+            '''
+            print("")
+        top_indx = indx1 - 1
+        indx1 = local_min_list[-1]
+        avg_dist = 0
+        while avg_dist < 3:
+            indx0 -= 1
+            line = cnvrt_2pts_to_coef(self.points[indx0].xy,
+                                           self.points[indx1].xy)
+            avg_dist, cum_dsqr = self.find_sum_of_sq_dist_to_line(line, indx0, indx1)
+            '''
+            print(f"Between index {indx0} and {indx1}:")
+            print(f"Average pnt-to-line distance is {avg_dist}")
+            print(f"Sum of square of distance is {cum_dsqr}")
+            print("")
+            '''
+        indx0 = indx0 + 1
+        indx1 = top_indx
+        line = cnvrt_2pts_to_coef(self.points[indx0].xy,
+                                       self.points[indx1].xy)
+        avg_dist, cum_dsqr = self.find_sum_of_sq_dist_to_line(line, indx0, indx1)
+        print(f"Between index {indx0} and {indx1}:")
+        print(f"Average pnt-to-line distance is {avg_dist}")
+        print(f"Sum of square of distance is {cum_dsqr}")
+        print("")
+        return (indx0, indx1)
 
     def _remove_hooks(self):
         """Remove the end point(s) of a region if they 'hook' off base line.
