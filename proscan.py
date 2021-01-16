@@ -95,10 +95,8 @@ class Point():
 
 
 # Default values used in ProcessScan
-GAP = 12
-CORNER = 10
-HOOK = 2
-
+GAP = 12  # Threshold distance between adjacent points for continuity
+FIT = 3  # Threshold distance (point to line) for good fit
 
 class ProcessScan():
     """
@@ -106,13 +104,12 @@ class ProcessScan():
     Plot points and/or lines. Display and/or save plot image.
     """
 
-    def __init__(self, data, lev=None, hev=None, gap=None, crnr=None, hook=None):
+    def __init__(self, data, lev=None, hev=None, gap=None, fit=None):
         """Generate list of Point objects from (scan) data.
         Optionally specify: sector of interest
         from lev (low encoder value) to hev (high encoder value),
-        gap (threshold of discontinuity of adjacent points),
-        crnr (threshold to detect a corner in a region of continuous points),
-        hook (to trigger rejection of end points hooked off main line).
+        gap (threshold distance between adjacent points for continuity),
+        fit (threshold point to line distance to qualify as 'good' fit).
         """
         if lev:
             self.LEV = lev
@@ -126,19 +123,154 @@ class ProcessScan():
             self.GAP = gap
         else:
             self.GAP = GAP
-        if crnr:
-            self.CORNER = crnr
+        if fit:
+            self.FIT = fit
         else:
-            self.CORNER = CORNER
-        if hook:
-            self.END_HOOK_LIMIT = hook
-        else:
-            self.END_HOOK_LIMIT = HOOK
+            self.FIT = FIT
         self.points = []
         self.regions = []
         self.segments = []
         self._generate_points(data)
         self._generate_regions()
+
+    def _cull_regions(self):
+        """Kind of like linting for regions..."""
+
+        # Remove regions having fewer than 4 points
+        to_remove = []
+        for region in self.regions:
+            if (region[-1] - region[0]) < 4:
+                to_remove.append(region)
+        logger.debug(f"Removed {len(to_remove)} tiny regions")
+        for region in to_remove:
+            self.regions.remove(region)
+
+        # Find and remove regions with only 1 point
+        for region in self.regions:
+            if region[0] == region[-1]:
+                self.regions.remove(region)
+                logger.debug("Removed a region with only 1 point")
+
+    def _find_corners(self, region):
+        """
+        If the points in a continuous region are substantially straight &
+        linear, they can be well represented by a straight line segment
+        between the start and end points of the region.
+        However, if the points in a region trace an 'L' or 'U' shape, as
+        they would where walls meet at corners, we would expect to find
+        multiple straight lines, with those lines intersecting at corners.
+
+        Two obvious places to initiate a search for a straight line are
+        the end points of the region.
+        Return list of indexes at found corners.
+        """
+        idx0, idx1 = region  # indexes of region end points
+        corners = []
+        # find local minimum in region
+        #local_min_list = self._find_local_min(idx0, idx1)
+        corner_idx = self._find_line_segment(idx0, idx1)
+        corners.append(corner_idx)
+        corner_idx = self._find_line_segment(idx1, idx0)
+        corners.append(corner_idx)
+        return corners
+
+    def _find_line_segment(self, begin_idx, end_idx):
+        """
+        Starting with the point at begin_idx and moving toward end_idx,
+        return the index of the last point in a series of adjacent points
+        (up to end_idx) which 'fit' the straight line segment drawn from
+        begin to end. The method is:
+        Starting with two adjacent points, test the fit of the points with
+        the line joining the points. Of course the fit wil be perfect with
+        only two points. Now, gradually extend the line by adding the next
+        point and again test the fit of all points with the line. Continue
+        to do this until the line cannot be made any longer and still have
+        a good fit.
+        Return the index of the last point that fits the straight line.
+        """
+        if begin_idx < end_idx:  # start at start_idx and go up
+            istrt = begin_idx
+            istop = begin_idx
+            avg_dist = 0
+            while avg_dist < self.FIT:
+                istop += 1
+                if istop > end_idx:
+                    break
+                line = cnvrt_2pts_to_coef(self.points[istrt].xy,
+                                          self.points[istop].xy)
+                avg_dist, cum_dsqr = self._find_sum_of_sq_dist_to_line(line,
+                                                                       istrt,
+                                                                       istop)
+            istop -= 1
+        elif begin_idx > end_idx:  # start at end_idx and go down
+            istrt = begin_idx
+            istop = begin_idx
+            avg_dist = 0
+            while avg_dist < self.FIT:
+                istop -= 1
+                if istop < end_idx:
+                    break
+                line = cnvrt_2pts_to_coef(self.points[istrt].xy,
+                                          self.points[istop].xy)
+                avg_dist, cum_dsqr = self._find_sum_of_sq_dist_to_line(line,
+                                                                      istrt,
+                                                                      istop)
+            istop += 1
+        return istop
+
+    def _find_local_min(self, indx0, indx1):
+        """
+        For points between indx0 & indx1, if there is a series of adjacent
+        points sharing a local min dist value, return a tuple of the
+        indexes of the first and last indexes of those adjacent points.
+        If not, return an empty tuple.
+
+        If a series of adjacent points happens to be at a local minimum
+        distance to the lidar module, it can be a good place to look for
+        and find a straight line. There are several reasons:
+        1. The points are spaced most closely together.
+        2. This section of wall is closest to the lidar module.
+        3. This area is being scanned from a direction which is nearly
+        parallel to the surface normal so the distance values will tend
+        to be more reliable than for areas being scanned more obliquely.
+        """
+        mindist = ()
+        for pnt in self.points:
+            dist = pnt.dist
+            if not mindist or dist < mindist:
+                mindist = dist
+        min_indx_list = [indx for indx, pnt in enumerate(self.points)
+                         if pnt.dist <= mindist+1]
+        return min_indx_list
+
+    def _find_p2p_angles_of_pnts(self, indx0, indx1):
+        """ """
+        indexlist = [indx for indx in range(indx0, indx1)]
+        slopelist = []
+        for indx in indexlist:
+            slope = proscan.p2p_angle(points[indx].xy, points[indx + 1].xy)
+            slopelist.append(slope)
+        return zip(indexlist, slopelist)
+
+    def _find_sum_of_sq_dist_to_line(self, line, indx0, indx1):
+        """
+        Return sum of squares of distances between line (a, b, c)
+        and a series of adjacent points from indx0 to indx1.
+        """
+        cum_dist = 0  # cumulative distance
+        cum_dsqr = 0  # cumulative distance squared
+        n = 0
+        if indx1 < indx0:
+            indx1, indx0 = indx0, indx1
+        for idx in range(indx0, indx1):
+            pnt = self.points[idx].xy
+            dist = p2line_dist(pnt, line)
+            dsqr = dist * dist
+            cum_dist += dist
+            cum_dsqr += dsqr
+            n += 1
+        avg_dist = cum_dist / n
+        return (avg_dist, cum_dsqr)
 
     def _generate_points(self, data):
         """
@@ -176,17 +308,6 @@ class ProcessScan():
             y = pnt.dist * math.sin(pnt.theta)
             pnt.xy = (x, y)
 
-    def find_local_min(self, indx0, indx1):
-        """Find local min value of distance between indx0 & indx1."""
-        mindist = None
-        for pnt in self.points:
-            dist = pnt.dist
-            if not mindist or dist < mindist:
-                mindist = dist
-        min_indx_list = [indx for indx, pnt in enumerate(self.points)
-                         if pnt.dist <= mindist+1]
-        return min_indx_list
-
     def _generate_regions(self):
         """Find continuous regions of closely spaced points (clumps)
         Large gaps (dist to neighbor > gap) represent 'edges' of regions.
@@ -215,146 +336,24 @@ class ProcessScan():
         # Cull tiny regions
         self._cull_regions()
 
-        # Find corners
-        # pop region1, split it and put back it back with corners
-        region1 = self.regions.pop()
-        corners = self._find_corners(region1)
-        newregions = [(region1[0], corners[0]),
-                      corners,
-                      (corners[1], region1[1])]
-        self.regions.extend(newregions)
-
-        # Remove hooked ends from segments Todo: get this working better
-        # self._remove_hooks()
-
-    def _cull_regions(self):
-        """Kind of like linting for regions..."""
-
-        # Remove regions having fewer than 4 points
-        to_remove = []
+        # In each region, find corners
+        allcorners = set()
         for region in self.regions:
-            if (region[-1] - region[0]) < 4:
-                to_remove.append(region)
-        logger.debug(f"Removed {len(to_remove)} tiny regions")
-        for region in to_remove:
-            self.regions.remove(region)
+            corners = self._find_corners(region)
+            for corner in corners:
+                allcorners.add(corner)
 
-        # Find and remove regions with only 1 point
+        # split existing regions at corners
+        new_regions = []
         for region in self.regions:
-            if region[0] == region[-1]:
-                self.regions.remove(region)
-                logger.debug("Removed a region with only 1 point")
-
-    def find_sum_of_sq_dist_to_line(self, line, indx0, indx1):
-        """
-        Return sum of squares of distances between line (a, b, c)
-        and a series of adjacent points from indx0 to indx1.
-        """
-        cum_dist = 0  # cumulative distance
-        cum_dsqr = 0  # cumulative distance squared
-        n = 0
-        for idx in range(indx0, indx1):
-            pnt = self.points[idx].xy
-            dist = p2line_dist(pnt, line)
-            dsqr = dist * dist
-            cum_dist += dist
-            cum_dsqr += dsqr
-            n += 1
-        avg_dist = cum_dist / n
-        return (avg_dist, cum_dsqr)
-
-    def find_p2p_angles_of_pnts(self, indx0, indx1):
-        """ """
-        indexlist = [indx for indx in range(indx0, indx1)]
-        slopelist = []
-        for indx in indexlist:
-            slope = proscan.p2p_angle(points[indx].xy, points[indx + 1].xy)
-            slopelist.append(slope)
-        return zip(indexlist, slopelist)
-
-    def _find_corners(self, region):
-        """
-        If the points in a continuous region are substantially straight &
-        linear, they can be well represented by a straight line segment
-        between the start and end points of the region.
-        However, if the points trace an 'L' or "U" shape, as they would where
-        walls meet at corners, multiple straight line segments would be needed,
-        with line segments meeting at corners.
-        One way to find a corner is to find the intersection of 2 straight
-        line segments. if there is an area where the points are spaced
-        most closely together, this will be a section of wall whose distance
-        to the robot is a local minimum. The robot is looking squarely at this
-        area, so the distance values will be more reliable than for areas
-        being measured more obliquely. Test to see if this is a straight
-        section of wall by checking the fit between the line joining the two
-        end points of the area with all the points between the end points.
-        If the fit is good, gradually extend the length of the area and keep
-        checking the fit of the line with the points. When the line cannot
-        be made any longer and still have a good fit, a corner has been found.
-        Return a tuple of indexes of the corners."""
-
-        idx0, idx1 = region
-        # find local minimum in region
-        local_min_list = self.find_local_min(idx0, idx1)
-        print(local_min_list)
-
-        indx0 = local_min_list[0]
-        indx1 = local_min_list[-1]
-        avg_dist = 0
-        while avg_dist < 3:
-            indx1 += 1
-            line = cnvrt_2pts_to_coef(self.points[indx0].xy,
-                                      self.points[indx1].xy)
-            avg_dist, cum_dsqr = self.find_sum_of_sq_dist_to_line(line, indx0, indx1)
-            '''
-            print(f"Between index {indx0} and {indx1}:")
-            print(f"Average pnt-to-line distance is {avg_dist}")
-            print(f"Sum of square of distance is {cum_dsqr}")
-            '''
-            print("")
-        top_indx = indx1 - 1
-        indx1 = local_min_list[-1]
-        avg_dist = 0
-        while avg_dist < 3:
-            indx0 -= 1
-            line = cnvrt_2pts_to_coef(self.points[indx0].xy,
-                                           self.points[indx1].xy)
-            avg_dist, cum_dsqr = self.find_sum_of_sq_dist_to_line(line, indx0, indx1)
-            '''
-            print(f"Between index {indx0} and {indx1}:")
-            print(f"Average pnt-to-line distance is {avg_dist}")
-            print(f"Sum of square of distance is {cum_dsqr}")
-            print("")
-            '''
-        indx0 = indx0 + 1
-        indx1 = top_indx
-        line = cnvrt_2pts_to_coef(self.points[indx0].xy,
-                                       self.points[indx1].xy)
-        avg_dist, cum_dsqr = self.find_sum_of_sq_dist_to_line(line, indx0, indx1)
-        print(f"Between index {indx0} and {indx1}:")
-        print(f"Average pnt-to-line distance is {avg_dist}")
-        print(f"Sum of square of distance is {cum_dsqr}")
-        print("")
-        return (indx0, indx1)
-
-    def _remove_hooks(self):
-        """Remove the end point(s) of a region if they 'hook' off base line.
-        """
-        for n, region in enumerate(self.regions):
-            start_idx = region[0]
-            end_idx = region[-1]
-            first_point = self.points[start_idx].xy
-            last_point = self.points[end_idx].xy
-            # find 'inner' base line points with first & last points removed
-            pt1, pt2 = (self.points[start_idx + 1].xy, self.points[end_idx -1].xy)
-            line = cnvrt_2pts_to_coef(pt1, pt2)
-            if p2line_dist(first_point, line) > self.END_HOOK_LIMIT:
-                start_idx += 2
-                logger.debug("Removed a point at start of line")
-            if p2line_dist(last_point, line) > self.END_HOOK_LIMIT:
-                end_idx -= 2
-                logger.debug("Removed a point at end of line")
-            self.regions[n] = (start_idx, end_idx)
+            new_indices = [region[0]]
+            for corner_idx in allcorners:
+                if corner_idx in range(region[0], region[-1]):
+                    new_indices.append(corner_idx)
+            new_indices.append(region[-1])
+            for n in range(len(new_indices)-1):
+                new_regions.append((new_indices[n], new_indices[n+1]))
+        self.regions = new_regions
 
     def get_line_parameters(self):
         """Return a list of tuples, each tuple containing the parameters
@@ -374,7 +373,7 @@ class ProcessScan():
             linelist.append((coords, length, angle, dist))
         return linelist
 
-    def indexes_in_regions(self):
+    def _indexes_in_regions(self):
         """Return list of indexes contained in regions.
         """
         indexes = []
@@ -398,14 +397,14 @@ class ProcessScan():
             pnts_to_plot = self.points
         else:
             pnts_to_plot = [pnt for idx, pnt in enumerate(self.points)
-                            if idx in self.indexes_in_regions()]
+                            if idx in self._indexes_in_regions()]
         for pnt in pnts_to_plot:
             x, y = pnt.xy
             xs.append(x)
             ys.append(y)
         plt.scatter(xs, ys, color='#003F72')
         title = "(%s pts) " % len(self.points)
-        title += "GAP: %s, CORNER: %s" % (self.GAP, self.CORNER)
+        title += "GAP = %s, FIT = %s" % (self.GAP, self.FIT)
         plt.title(title)
 
         # plot line segments
