@@ -132,6 +132,7 @@ class ProcessScan():
         self.segments = []
         self._generate_points(data)
         self._generate_regions()
+        self._generate_segments()
 
     def _cull_regions(self):
         """Kind of like linting for regions..."""
@@ -160,9 +161,8 @@ class ProcessScan():
         they would where walls meet at corners, we would expect to find
         multiple straight lines, with those lines intersecting at corners.
 
-        Two obvious places to initiate a search for a straight line are
-        the end points of the region.
-        Return list of indexes at found corners in region.
+        This method initiates the search at the beginning of the region
+        and returns a list of indexes of the found corners.
         """
         idx0, idx1 = region  # indexes of region end points
         # Find corners with index ascending
@@ -172,12 +172,13 @@ class ProcessScan():
             corner_idx = self._find_line_segment(corner_idx, idx1)
             corners_fwd.append(corner_idx)
 
-        # Now find corners looking in the reverse direction
+        # Alternatively, we could look in the reverse direction
         corners_rev = []
         corner_idx = idx1
         while corner_idx != idx0:
             corner_idx = self._find_line_segment(corner_idx, idx0)
             corners_rev.append(corner_idx)
+
         logger.debug(f"region: {region}")
         logger.debug(f"corners forward: {corners_fwd}")
         logger.debug(f"corners reverse: {corners_rev}")
@@ -251,7 +252,7 @@ class ProcessScan():
         return min_indx_list
 
     def _find_p2p_angles_of_pnts(self, indx0, indx1):
-        """ """
+        """Tabulate point to point angle of a serries of adjacent points."""
         indexlist = [indx for indx in range(indx0, indx1)]
         slopelist = []
         for indx in indexlist:
@@ -309,7 +310,7 @@ class ProcessScan():
             theta = (self.HEV - pnt.enc_val) * math.pi / (self.HEV - self.LEV)
             pnt.theta = theta
 
-        # convert polar coords (dist, theta) to (x, y) coords
+        # calculate (x, y) coords from polar coords (dist, theta)
         for pnt in self.points:
             x = pnt.dist * math.cos(pnt.theta)
             y = pnt.dist * math.sin(pnt.theta)
@@ -319,8 +320,8 @@ class ProcessScan():
         """Find continuous regions of closely spaced points (clumps)
         Large gaps (dist to neighbor > gap) represent 'edges' of regions.
         Record index of the start & end points of each region.
-        Save as self.regions.
-        """
+        Save as self.regions."""
+
         regions = []  # list of regions of closely spaced points
         start_index = 0
         dist = 0
@@ -343,6 +344,12 @@ class ProcessScan():
         # Cull tiny regions
         self._cull_regions()
 
+    def _generate_segments(self):
+        """
+        Within regions, detect linear sections which can be represented
+        by straight line segments. Save as self.segments.
+        """
+
         # In each region, find corners
         allcorners = set()
         for region in self.regions:
@@ -351,7 +358,7 @@ class ProcessScan():
                 allcorners.add(corner)
 
         # split existing regions at corners
-        new_regions = []
+        segments = []
         for region in self.regions:
             new_indices = [region[0]]
             for corner_idx in allcorners:
@@ -359,17 +366,26 @@ class ProcessScan():
                     new_indices.append(corner_idx)
             new_indices.append(region[-1])
             for n in range(len(new_indices)-1):
-                new_regions.append((new_indices[n], new_indices[n+1]))
-        self.regions = new_regions
+                segments.append((new_indices[n], new_indices[n+1]))
+        self.segments = segments
+
+    def _indexes_in_regions(self):
+        """Return list of indexes contained in regions.
+        """
+        indexes = []
+        for region in self.regions:
+            indexes.extend(range(region[0], region[-1]+1))
+        return indexes
 
     def get_line_parameters(self):
         """Return a list of tuples, each tuple containing the parameters
-        of the line which best fits each region in self.regions.
-        acronym: 'clad' for (coords, length, angle, distance)."""
+        of the line which best fits each segment in self.segments.
+        parameter acronym: 'clad' for (coords, length, angle, distance)
+        """
         linelist = []
-        for region in self.regions:
-            start_idx = region[0]
-            end_idx = region[1]
+        for segment in self.segments:
+            start_idx = segment[0]
+            end_idx = segment[1]
             start_coords = self.points[start_idx].xy
             end_coords = self.points[end_idx].xy
             line = cnvrt_2pts_to_coef(start_coords, end_coords)
@@ -379,14 +395,6 @@ class ProcessScan():
             dist = p2line_dist((0, 0), line)  # perp distance to line
             linelist.append((coords, length, angle, dist))
         return linelist
-
-    def _indexes_in_regions(self):
-        """Return list of indexes contained in regions.
-        """
-        indexes = []
-        for region in self.regions:
-            indexes.extend(range(region[0], region[-1]+1))
-        return indexes
 
     def map(self, map_folder="Maps", nmbr=None, show=True,
             display_all_points=False):
@@ -415,8 +423,8 @@ class ProcessScan():
 
         # plot line segments
         line_coords = []  # x, y coordinates
-        for region in self.regions:
-            idx1, idx2 = region
+        for segment in self.segments:
+            idx1, idx2 = segment
             pnt1 = self.points[idx1].xy
             pnt2 = self.points[idx2].xy
             x_vals = [pnt1[0], pnt2[0]]
