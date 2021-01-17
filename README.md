@@ -11,14 +11,12 @@ More about **Omni-Wheels** can be found [here](omni-wheels.md).
 
 The scan data are collected by a python program running on a Raspberry Pi 3B+.
 The python program
-* Collects data from the TFminiPlus on the serial port
+* Sends commands to the Arduino on the serial port
+* Collects data from the TFminiPlus on a USB serial port
 * Collects readings from the angular encoder on the I2C bus
-* Sends commands to the Arduino on the SPI bus
 * Finds the best fit lines through the scan points
 * Displays a plot of the points and the best fit lines.
 
 The Arduino controls the motors through an Adafruit motor shield
 
 ![plot showing data points & best-fit lines](images/scandata4.png)
-
-[Things To Do Next](docs/ToDo.md)
