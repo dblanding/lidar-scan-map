@@ -181,7 +181,7 @@ class ProcessScan():
         logger.debug(f"region: {region}")
         logger.debug(f"corners forward: {corners_fwd}")
         logger.debug(f"corners reverse: {corners_rev}")
-        
+
         return corners_fwd
 
     def _find_line_segment(self, begin_idx, end_idx):
@@ -198,33 +198,30 @@ class ProcessScan():
         a good fit.
         Return the index of the last point that fits the straight line.
         """
-        if begin_idx < end_idx:  # start at start_idx and go up
-            istrt = begin_idx
-            istop = begin_idx
-            avg_dist = 0
-            while avg_dist < self.FIT:
+        if begin_idx < end_idx:  # indexes ascending
+            ascending = True
+        else:  # indexes descending
+            ascending = False
+        istrt = begin_idx
+        istop = begin_idx
+        avg_dist = 0
+        while avg_dist < self.FIT:
+            if ascending:
                 istop += 1
                 if istop > end_idx:
                     break
-                line = cnvrt_2pts_to_coef(self.points[istrt].xy,
-                                          self.points[istop].xy)
-                avg_dist, cum_dsqr = self._find_sum_of_sq_dist_to_line(line,
-                                                                       istrt,
-                                                                       istop)
-            istop -= 1
-        elif begin_idx > end_idx:  # start at end_idx and go down
-            istrt = begin_idx
-            istop = begin_idx
-            avg_dist = 0
-            while avg_dist < self.FIT:
+            else:
                 istop -= 1
                 if istop < end_idx:
                     break
-                line = cnvrt_2pts_to_coef(self.points[istrt].xy,
-                                          self.points[istop].xy)
-                avg_dist, cum_dsqr = self._find_sum_of_sq_dist_to_line(line,
-                                                                      istrt,
-                                                                      istop)
+            line = cnvrt_2pts_to_coef(self.points[istrt].xy,
+                                      self.points[istop].xy)
+            avg_dist, cum_dsqr = self._find_sum_of_sq_dist_to_line(line,
+                                                                   istrt,
+                                                                   istop)
+        if ascending:
+            istop -= 1
+        else:
             istop += 1
         return istop
 
