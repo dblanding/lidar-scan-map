@@ -162,23 +162,33 @@ class ProcessScan():
 
         Two obvious places to initiate a search for a straight line are
         the end points of the region.
-        Return list of indexes at found corners.
+        Return list of indexes at found corners in region.
         """
         idx0, idx1 = region  # indexes of region end points
-        corners = []
-        # find local minimum in region
-        #local_min_list = self._find_local_min(idx0, idx1)
-        corner_idx = self._find_line_segment(idx0, idx1)
-        corners.append(corner_idx)
-        corner_idx = self._find_line_segment(idx1, idx0)
-        corners.append(corner_idx)
-        return corners
+        # Find corners with index ascending
+        corners_fwd = []
+        corner_idx = idx0
+        while corner_idx != idx1:
+            corner_idx = self._find_line_segment(corner_idx, idx1)
+            corners_fwd.append(corner_idx)
+
+        # Now find corners looking in the reverse direction
+        corners_rev = []
+        corner_idx = idx1
+        while corner_idx != idx0:
+            corner_idx = self._find_line_segment(corner_idx, idx0)
+            corners_rev.append(corner_idx)
+        logger.debug(f"region: {region}")
+        logger.debug(f"corners forward: {corners_fwd}")
+        logger.debug(f"corners reverse: {corners_rev}")
+        
+        return corners_fwd
 
     def _find_line_segment(self, begin_idx, end_idx):
         """
         Starting with the point at begin_idx and moving toward end_idx,
         return the index of the last point in a series of adjacent points
-        (up to end_idx) which 'fit' the straight line segment drawn from
+        (up to end_idx) which 'fits' the straight line segment drawn from
         begin to end. The method is:
         Starting with two adjacent points, test the fit of the points with
         the line joining the points. Of course the fit wil be perfect with
@@ -403,8 +413,7 @@ class ProcessScan():
             xs.append(x)
             ys.append(y)
         plt.scatter(xs, ys, color='#003F72')
-        title = "(%s pts) " % len(self.points)
-        title += "GAP = %s, FIT = %s" % (self.GAP, self.FIT)
+        title = f"({len(self.points)} pts) GAP={self.GAP}, FIT={self.FIT}"
         plt.title(title)
 
         # plot line segments
