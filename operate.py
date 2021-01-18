@@ -20,12 +20,34 @@ logger.debug(f"Message from Arduino: {from_arduino}")
 
 W2W_DIST = 34  # separation between coaxial wheels (cm)
 PAUSE = 0.05  # sec PAUSE time needed between wheel motor commands
-CLEARANCE = 50  # threshold min clearance to wall (cm)
+CLEARANCE = 30  # threshold min clearance to wall (cm)
 MIN_LENGTH = 20  # threshold min length to end of wall (cm)
 MIN_DIST = 40  # threshold min distance from car to wall (cm)
 KP = 0.25  # steering PID proportional coefficient
 KD = 0.3  # steering PID derivative coefficient
-CARSPEED = 120  # default car speed
+CARSPEED = 150  # default car speed
+EOW = 10  # Threshold End of Wall
+
+class PID():
+    """Adjust trim to maintain heading using pid feedback from compass."""
+
+    def __init__(self, target):
+        self.target = target
+        self.prev_error = 0
+        self.trimval = 3
+
+    def trim(self):
+        """Return value for spin"""
+        hdg = car.heading()
+        heading_error = hdg - self.target
+        p_term = heading_error
+        d_term = heading_error - self.prev_error
+        self.prev_error = heading_error
+        adjustment = int((p_term * KP + d_term * KD))
+        self.trimval += adjustment
+        #logger.debug(f"P-term: {p_term:.2f}\tD-term: {d_term:.2f}\tTrim: {self.trimval}\tHDG: {int(hdg)}")
+        return self.trimval
+
 
 def normalize_angle(angle):
     """convert any value of angle to a value between 0-360."""
@@ -124,10 +146,11 @@ def square_to_wall(mapping=True):
     """Spin car to square to wall that is roughly in front."""
 
     # get scan line(s)
-    data = car.scan(spd=180, lev=17500, hev=22500)
-    pscan = proscan.ProcessScan(data, gap=6)
+    data = car.scan(lev=17500, hev=22500)
+    pscan = proscan.ProcessScan(data)
     line_params = pscan.get_line_parameters()
-    
+    print(len(data))
+    print(f"line parameters: {line_params}")
     # Examine first line found
     coords, length, angle, dist = line_params[0]
 
@@ -161,8 +184,8 @@ def approach_wall(carspeed, clearance, mapping=False):
     trim course to maintain current compass heading."""
 
     # get scan line(s)
-    data = car.scan(spd=180, lev=17500, hev=22500)
-    pscan = proscan.ProcessScan(data, gap=6)
+    data = car.scan(lev=17500, hev=22500)
+    pscan = proscan.ProcessScan(data)
     line_params = pscan.get_line_parameters()
     coords, length, angle, dist = longest_line(line_params)
 
@@ -173,27 +196,21 @@ def approach_wall(carspeed, clearance, mapping=False):
     # OK to proceed?
     if dist > clearance:
         dist, *rest = car.go(carspeed, math.pi/2)
+        prev_dist = dist
+        sustained_dist = (dist + prev_dist) / 2        
 
-    # initialize steering variables
-    trim = 3  # estimate of needed steering trim
+    # instantiate PID steering
     target_heading = car.heading()
-    prev_error = 0
+    pid = PID(target_heading)
     logger.debug("")
     logger.debug(f"Approach wall to dist < {clearance}, target heading = {int(target_heading)}")
-    logger.debug("")
-    logger.debug(f"Dist\tPterm\tDterm\ttrim\tHeading")
+
     # continue toward wall
-    while dist > clearance:
-        # Adjust trim to maintain heading using pid feedback
-        hdg = car.heading()
-        heading_error = hdg - target_heading
-        p_term = heading_error
-        d_term = heading_error - prev_error
-        prev_error = heading_error
-        adjustment = int((p_term * KP + d_term * KD))
-        trim += adjustment
-        logger.debug(f"{int(dist)}\t{p_term:.2f}\t{d_term:.2f}\t{trim}\t{int(hdg)}")
-        dist, *rest = car.go(carspeed, math.pi/2, spin=trim)
+    while sustained_dist > clearance:  # sonar occasionally gives false low values
+        dist, *rest = car.go(carspeed, math.pi/2, spin=pid.trim())
+        logger.debug(f"Dist: {int(dist)}")
+        sustained_dist = (dist + prev_dist) / 2
+        prev_dist = dist
 
     car.stop_wheels()
 
@@ -201,10 +218,9 @@ def drive_along_wall_to_right(carspeed, clearance, mapping=False):
     """Drive to right maintaining clearance to wall in front. Stop at end.
     Return dist value at end."""
 
-    EOW = 10
     # get scan line(s)
-    data = car.scan(spd=180, lev=17500, hev=22500)
-    pscan = proscan.ProcessScan(data, gap=5)
+    data = car.scan(lev=17500, hev=22500)
+    pscan = proscan.ProcessScan(data)
     line_params = pscan.get_line_parameters()
     coords, length, angle, dist = longest_line(line_params)
     end_of_wall = coords[-1][0]  # x coordinate of right end of wall
@@ -217,34 +233,22 @@ def drive_along_wall_to_right(carspeed, clearance, mapping=False):
     if end_of_wall > EOW:
         car.go(carspeed, 0)
 
-    # initialize steering variables
-    trim = 3  # estimate of needed steering trim
+    # initialize pid steering
     target_heading = car.heading()
-    prev_error = 0
+    pid = PID(target_heading)
     logger.debug("")
     logger.debug(f"Drive right until end of wall < {EOW}, target heading = {int(target_heading)}")
-    logger.debug("")
-    logger.debug(f"Dist\tAngle\tEOW\tPterm\tDterm\ttrim\tHeading")
 
     # continue to end of wall
     while end_of_wall > EOW:
         # get scan line(s)
-        data = car.scan(spd=180, lev=17500, hev=22500)
-        pscan = proscan.ProcessScan(data, gap=5)
+        data = car.scan(lev=17500, hev=22500)
+        pscan = proscan.ProcessScan(data)
         line_params = pscan.get_line_parameters()
         coords, length, angle, dist = longest_line(line_params)
         end_of_wall = coords[-1][0]  # x coordinate of right end of wall
-
-        # Adjust trim to maintain heading using pid feedback
-        hdg = car.heading()
-        heading_error = hdg - target_heading
-        p_term = heading_error
-        d_term = heading_error - prev_error
-        prev_error = heading_error
-        adjustment = int((p_term * KP + d_term * KD))
-        trim += adjustment
-        logger.debug(f"{int(dist)}\t{angle:.2f}\t{end_of_wall:.2f}\t{p_term:.2f}\t{d_term:.2f}\t{trim}\t{int(hdg)}")
-        car.go(carspeed, 0, spin=trim)
+        car.go(carspeed, 0, spin=pid.trim())
+        logger.debug(f"Dist: {int(dist)}\tAngle: {angle:.2f}\tEOW: {end_of_wall:.2f}")
 
     car.stop_wheels()
 
@@ -355,15 +359,15 @@ def find_clear_path(data, thresh=None):
     return (rel_heading, stop_dist)
 
 if __name__ == "__main__":
-    '''
+    
     square_to_wall()
     
     dist = approach_wall(CARSPEED, CLEARANCE)
     
-    dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)
+    dist = drive_along_wall_to_right(CARSPEED, CLEARANCE, mapping=True)
     
     radius_turn_on_the_go(0, 90, CLEARANCE)
-    
+    '''
     #data = car.go(100, 0)
     data = car.scan()
     print(f"'Sensor data' returned from car.go() command: {data}")
@@ -385,12 +389,13 @@ if __name__ == "__main__":
         # goes 64 inches (162 cm) in 10 sec @ spd = 150
         time.sleep(dist_to_go / 16)
         car.stop_wheels()
-    '''
+    
     data = car.scan(spd=150)
     with open('scan_data.pkl', 'wb') as f:
         pickle.dump(data, f)
     print(f"total number of points: {len(data)}")
     save_scandata_as_csv(data, 'scan_data.csv')
     pscan = proscan.ProcessScan(data)
-    pscan.map(nmbr=1, display_all_points=True)  
+    pscan.map(nmbr=1, display_all_points=True)
+    '''
     car.close()
