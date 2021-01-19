@@ -281,6 +281,15 @@ def save_scandata_as_csv(data, filename):
     with open(filename, 'w') as f:
         f.writelines(write_data)
 
+def save_scan():    
+    data = car.scan()
+    with open('scan_data.pkl', 'wb') as f:
+        pickle.dump(data, f)
+    print(f"total number of points: {len(data)}")
+    save_scandata_as_csv(data, 'scan_data.csv')
+    pscan = proscan.ProcessScan(data)
+    pscan.map(nmbr=1, display_all_points=True)
+
 def find_std_dev(datalist):
     # Standard deviation of list 
     # Using sum() + list comprehension 
@@ -359,7 +368,9 @@ def find_clear_path(data, thresh=None):
     return (rel_heading, stop_dist)
 
 if __name__ == "__main__":
-    
+    '''
+    save_scan()
+    '''
     square_to_wall()
     
     dist = approach_wall(CARSPEED, CLEARANCE)
@@ -389,13 +400,5 @@ if __name__ == "__main__":
         # goes 64 inches (162 cm) in 10 sec @ spd = 150
         time.sleep(dist_to_go / 16)
         car.stop_wheels()
-    
-    data = car.scan(spd=150)
-    with open('scan_data.pkl', 'wb') as f:
-        pickle.dump(data, f)
-    print(f"total number of points: {len(data)}")
-    save_scandata_as_csv(data, 'scan_data.csv')
-    pscan = proscan.ProcessScan(data)
-    pscan.map(nmbr=1, display_all_points=True)
     '''
     car.close()

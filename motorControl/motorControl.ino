@@ -219,8 +219,8 @@ void loop() {
       CommandRotor(spd5);
     }
   }
-  if (FrontSensor <= 10)
-  {
-    CommandWheels(0, 0, 0, 0);
-  }
+  //if (FrontSensor <= 10)
+  //{
+    //CommandWheels(0, 0, 0, 0);
+  //}
 }

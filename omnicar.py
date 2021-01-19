@@ -30,16 +30,26 @@ adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain
 
 #  For bi-directional communication with Arduino
-ports = ['/dev/ttyACM0', '/dev/ttyACM1']
+ports = ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyS0']
 for port in ports:
     if os.path.exists(port):
         ser0 = serial.Serial(port, 9600, timeout=0.5)
-        #ser0.flush()
+        #ser1 = serial.Serial(port, 115200)
         break
+    else:
+        port = None
 logger.info(f"Serial port = {port}")
 
 # For access to lidar distance sensor
-ser1 = serial.Serial("/dev/ttyUSB0", 115200)
+usbports = ['/dev/ttyUSB0', '/dev/ttyUSB1']
+for usbport in usbports:
+    if os.path.exists(usbport):
+        #ser0 = serial.Serial(usbport, 9600, timeout=0.5)
+        ser1 = serial.Serial(usbport, 115200)
+        break
+    else:
+        usbport = None
+logger.info(f"USB_Serial port = {usbport}")
 
 i2cbus = smbus.SMBus(1)
 HMC5883_ADDRESS = 0x1e   # 0x3c >> 1
@@ -217,12 +227,14 @@ class OmniCar():
         counter = ser1.in_waiting # bytes available on serial port
         if counter > 8:
             bytes_serial = ser1.read(9)
+            ser1.reset_input_buffer()
+            #ser1.flushInput()  # Keep the buffer empty (purge stale data)
             if bytes_serial[0] == 0x59 and bytes_serial[1] == 0x59:
                 self.distance = bytes_serial[2] + bytes_serial[3]*256
                 self.strength = bytes_serial[4] + bytes_serial[5]*256
                 temperature = bytes_serial[6] + bytes_serial[7]*256
                 self.temperature = (temperature/8) - 256
-            ser1.flushInput()  # Keep the buffer empty (purge stale data)
+                #ser1.reset_input_buffer()
         return counter
 
     def get_enc_val(self):
@@ -237,7 +249,7 @@ class OmniCar():
         """Turn scan motor off."""
         sensor_data = self._xfer_data((2, 0, 0, 0, 0, 0))
 
-    def scan(self, spd=200, lev=LEV, hev=HEV):
+    def scan(self, spd=150, lev=LEV, hev=HEV):
         """Run scan mtr at spd (100-255) and return list of tuples of
         scan data for encoder values between lev (low encoder value) and
         hev (high encoder value).
@@ -275,5 +287,9 @@ class OmniCar():
 if __name__ == "__main__":
     car = OmniCar()
     while True:
-        print(car.heading())
+        print("")
+        print(f"Heading = {car.heading()}")
+        car.read_dist()
+        print(f"Distance = {car.distance}")
+        print(f"Enc Val = {car.get_enc_val()}")
         time.sleep(1)
