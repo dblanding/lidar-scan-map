@@ -98,3 +98,38 @@ This makes a very noticeable difference in the resulting plot.
 Unfortunately however, the **shapes** of the scanned objects are distorted in the above plot. For example, the object that lies straight ahead of the scanner (on the vertical grid line labeled '0') is distorted. It is the back of a sofa and it is actually straight. So now I want to replace the LiDAR module with the original one, but still leave it attached to the RasPi's built-in serial port. Below is shown the resulting plot. This is how the back of the sofa is **really supposed to look**. Notice also that the wall at the left is straight. It is supposed to be straight. Apparently there is something going on with the new LiDAR module that is not quite right.
 
 ![scanMap3.png](scanMap3.png)
+
+## Problem Found (and resolved)!
+
+#### The problem
+
+Looking at the raw scan data shows the problem is being caused by reading the serial bus **too frequently and whether or not there is new data available to be read**. And to make matters worse, every time the method is called, the input buffer is reset, further delaying the acquisition of new data.
+
+#### The solution
+
+The read_dist method has now been revised to wait until 9 bytes have accumulated on the input buffer, then it reads the data. The input buffer is not reset so no data is thrown away. Below is a scan with the new read_dist method, using the original LiDAR module, attached to the USB serial port. This is actually a pretty accurate representation of the room.
+
+![scanMap4.png](scanMap4.png)
+
+```    def read_dist(self):
+        """Set self.distance = distance (cm) read from lidar module.
+        Return number of bytes waiting on serial port when read.
+        """
+        # Prior to first read, purge buildup of 'stale' data
+        if ser1.in_waiting > 100:
+            ser1.reset_input_buffer()
+
+        # Wait for serial port to accumulate 9 bytes of 'fresh' data
+        while ser1.in_waiting < 9:
+            time.sleep(.0005)
+
+        # Now read 9 bytes of data on serial port
+        counter = ser1.in_waiting
+        bytes_serial = ser1.read(9)
+        if bytes_serial[0] == 0x59 and bytes_serial[1] == 0x59:
+            self.distance = bytes_serial[2] + bytes_serial[3]*256
+            #self.strength = bytes_serial[4] + bytes_serial[5]*256
+            #temperature = bytes_serial[6] + bytes_serial[7]*256
+            #self.temperature = (temperature/8) - 256
+        return counter
+```
