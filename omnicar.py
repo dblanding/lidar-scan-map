@@ -222,19 +222,24 @@ class OmniCar():
 
     def read_dist(self):
         """Set self.distance = distance (cm) read from lidar module.
-        Return number of bytes that were waiting on serial port.
+        Return number of bytes waiting on serial port when read.
         """
-        counter = ser1.in_waiting # bytes available on serial port
-        if counter > 8:
-            bytes_serial = ser1.read(9)
+        # Prior to first read, purge buildup of 'stale' data
+        if ser1.in_waiting > 100:
             ser1.reset_input_buffer()
-            #ser1.flushInput()  # Keep the buffer empty (purge stale data)
-            if bytes_serial[0] == 0x59 and bytes_serial[1] == 0x59:
-                self.distance = bytes_serial[2] + bytes_serial[3]*256
-                self.strength = bytes_serial[4] + bytes_serial[5]*256
-                temperature = bytes_serial[6] + bytes_serial[7]*256
-                self.temperature = (temperature/8) - 256
-                #ser1.reset_input_buffer()
+
+        # Wait for serial port to accumulate 9 bytes of 'fresh' data
+        while ser1.in_waiting < 9:
+            time.sleep(.0005)
+
+        # Now read 9 bytes of data on serial port
+        counter = ser1.in_waiting
+        bytes_serial = ser1.read(9)
+        if bytes_serial[0] == 0x59 and bytes_serial[1] == 0x59:
+            self.distance = bytes_serial[2] + bytes_serial[3]*256
+            #self.strength = bytes_serial[4] + bytes_serial[5]*256
+            #temperature = bytes_serial[6] + bytes_serial[7]*256
+            #self.temperature = (temperature/8) - 256
         return counter
 
     def get_enc_val(self):
