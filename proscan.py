@@ -11,6 +11,10 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 
 style.use('fivethirtyeight')
 
+# Default values used in ProcessScan
+GAP = 12  # Threshold distance between adjacent points for continuity
+FIT = 3  # Threshold distance (point to line) for good fit
+
 # utility functions for working with 2D points and lines
 # a point (x, y) is represented by its x, y coordinates
 # a line (a, b, c) is represented by the eqn: ax + by + c = 0
@@ -50,38 +54,6 @@ def p2line_dist(pt, line):
     p0 = proj_pt_on_line(line, pt)
     return p2p_dist(pt, p0)
 
-def group(data):
-    """lidar has the habit of producing repeated distance values for
-    adjacent points, 'triplets' being common, occasionally 'twins'.
-    This function groups adjacent points with the same dist value
-    into groups of triplets or twins."""
-    group = []
-    grouped_data = []
-    for record in data:
-        if not group:  # Initial pass through for loop
-            dist = record[1]
-            group.append(record[:2])
-        elif len(group) == 3:  # cap group size at 3
-            grouped_data.append(group)
-            dist = record[1]
-            group = [record[:2]]
-        elif dist == record[1]:
-            group.append(record[:2])
-        else:
-            grouped_data.append(group)
-            dist = record[1]
-            group = [record[:2]]
-    grouped_data.append(group)  # append final group
-    return grouped_data
-
-def cull_repeats(grouped_data):
-    """Filters all but one from each group of triplets or twins."""
-    thindata = []
-    for group in grouped_data:
-        idx = len(group) // 2  # index of record to keep
-        thindata.append(group[idx])
-    return thindata
-
 
 class Point():
     """Convenience structure encapsulating data point measured values
@@ -93,10 +65,6 @@ class Point():
         self.theta = theta  # (derived) float angle wrt car (radians)
         self.xy = xy  # (x, y) coordinates
 
-
-# Default values used in ProcessScan
-GAP = 12  # Threshold distance between adjacent points for continuity
-FIT = 3  # Threshold distance (point to line) for good fit
 
 class ProcessScan():
     """
@@ -282,26 +250,21 @@ class ProcessScan():
 
     def _generate_points(self, data):
         """
-        Thin raw data by culling adjacent records with same distance value.
-        Each item of data contains 4 values:
-        encoder_count, distance, byte_count, delta_time.
-        Populate self.points list with Point objects,
+        From data, populate self.points list with Point objects,
         removing any whose distance value is 0 or 1200.
 
-        enc_cnt (encoder count) values start at 0 
-        and increase with CW rotation.
+        data is csv: encoder_count, distance, byte_count, delta_time
+
+        encoder_count values start at 0 and increase with CW rotation.
         straight left: enc_val = self.LEV; theta = pi
         straight ahead: enc_val = self.MEV; theta = pi/2
         straight right: enc_val = self.HEV; theta = 0
         (enc_cnt tops out at 32765, so no info past that)
         """
-        grouped_data = group(data)
-        thindata = cull_repeats(grouped_data)
-        for item in thindata:
-            enc_cnt = item[0]
-            dist = item[1]
+        for item in data:
+            encoder_count, dist = item[:2]
             if dist and dist <= 1200:
-                pnt = Point(dist, enc_cnt)
+                pnt = Point(dist, encoder_count)
                 self.points.append(pnt)
 
         # calculate 'theta' value of each point (for polar coords)

@@ -68,6 +68,16 @@ def convert_polar_to_rect(r, theta):
     y = r * math.sin(theta)
     return (x, y)
 
+def convert_rect_to_polar(x, y):
+    """Convert rectangular coords (x,y) to polar coords (r, theta)
+    theta is in radians."""
+    r = math.sqrt(x*x + y*y)
+    t = atan(y/x)
+    # arctan is tricky... add pi for quadrants 2 & 3 
+    if (x<0):
+        t += math.pi
+    return (r, t)
+
 class OmniCar():
     """Control motors & access sensors of omni-wheel car."""
 

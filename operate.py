@@ -368,7 +368,7 @@ def find_clear_path(data, thresh=None):
     return (rel_heading, stop_dist)
 
 if __name__ == "__main__":
-    '''
+    
     save_scan()
     '''
     square_to_wall()
@@ -378,7 +378,7 @@ if __name__ == "__main__":
     dist = drive_along_wall_to_right(CARSPEED, CLEARANCE, mapping=True)
     
     radius_turn_on_the_go(0, 90, CLEARANCE)
-    '''
+    
     #data = car.go(100, 0)
     data = car.scan()
     print(f"'Sensor data' returned from car.go() command: {data}")
