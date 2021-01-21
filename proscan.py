@@ -6,7 +6,7 @@ import sys
 import omnicar as oc
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 style.use('fivethirtyeight')
@@ -135,10 +135,13 @@ class ProcessScan():
         idx0, idx1 = region  # indexes of region end points
         # Find corners with index ascending
         corners_fwd = []
-        corner_idx = idx0
-        while corner_idx != idx1:
-            corner_idx = self._find_line_segment(corner_idx, idx1)
+        start_idx = idx0
+        while start_idx != idx1:
+            print(f"start index = {start_idx}")
+            corner_idx = self._find_line_segment(start_idx, idx1)
             corners_fwd.append(corner_idx)
+            start_idx = corner_idx
+            
 
         # Alternatively, we could look in the reverse direction
         corners_rev = []
@@ -266,7 +269,7 @@ class ProcessScan():
             if dist and dist <= 1200:
                 pnt = Point(dist, encoder_count)
                 self.points.append(pnt)
-
+        print(len(self.points))
         # calculate 'theta' value of each point (for polar coords)
         for pnt in self.points:
             #theta = math.pi * 1.5 * (1 - (pnt.enc_val / 30000))
@@ -313,24 +316,21 @@ class ProcessScan():
         by straight line segments. Save as self.segments.
         """
 
-        # In each region, find corners
-        allcorners = set()
+        # build a set of indices in each region
+        # representing the end points of line segments
+        all_segments = []
         for region in self.regions:
+            start_idx, end_idx = region
             corners = self._find_corners(region)
-            for corner in corners:
-                allcorners.add(corner)
-
-        # split existing regions at corners
-        segments = []
-        for region in self.regions:
-            new_indices = [region[0]]
-            for corner_idx in allcorners:
-                if corner_idx in range(region[0], region[-1]):
-                    new_indices.append(corner_idx)
-            new_indices.append(region[-1])
-            for n in range(len(new_indices)-1):
-                segments.append((new_indices[n], new_indices[n+1]))
-        self.segments = segments
+            for index in region:
+                if index not in corners:
+                    corners.append(index)
+            corners.sort()
+            segments = []
+            for idx1, idx2 in zip(corners, corners[1:]):
+                segments.append((idx1, idx2))
+            all_segments.extend(segments)
+        self.segments = all_segments
 
     def _indexes_in_regions(self):
         """Return list of indexes contained in regions.

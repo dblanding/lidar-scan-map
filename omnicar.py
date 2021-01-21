@@ -265,9 +265,19 @@ class OmniCar():
         sensor_data = self._xfer_data((2, 0, 0, 0, 0, 0))
 
     def scan(self, spd=150, lev=LEV, hev=HEV):
-        """Run scan mtr at spd (100-255) and return list of tuples of
-        scan data for encoder values between lev (low encoder value) and
-        hev (high encoder value).
+        """
+        Perform one LiDAR scan. Return data as list of tuples.
+
+        optional keyword arguments:
+            spd -> scan motor speed (100-255)
+            lev (low encoder value) -> start of scan
+            hev (high encoder value) -> end of scan
+
+        values in returned tuples:
+            encoder_count,
+            distance read by LiDAR module (cm),
+            number of bytes waiting in input buffer at time of read,
+            time since previous read (sec)
         """
         enc_val = self.get_enc_val()
         # If scan rotor isn't near BDC (back dead cntr), go to BDC

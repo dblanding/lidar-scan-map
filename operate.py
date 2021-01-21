@@ -45,7 +45,7 @@ class PID():
         self.prev_error = heading_error
         adjustment = int((p_term * KP + d_term * KD))
         self.trimval += adjustment
-        #logger.debug(f"P-term: {p_term:.2f}\tD-term: {d_term:.2f}\tTrim: {self.trimval}\tHDG: {int(hdg)}")
+        logger.debug(f"P-term: {p_term:.2f}\tD-term: {d_term:.2f}\tTrim: {self.trimval}\tHDG: {int(hdg)}")
         return self.trimval
 
 
@@ -281,14 +281,16 @@ def save_scandata_as_csv(data, filename):
     with open(filename, 'w') as f:
         f.writelines(write_data)
 
-def save_scan():    
+def save_scan(nmbr=None):
+    if nmbr is None:
+        nmbr = ''
     data = car.scan()
-    with open('scan_data.pkl', 'wb') as f:
+    with open(f'scan_data{nmbr}.pkl', 'wb') as f:
         pickle.dump(data, f)
     print(f"total number of points: {len(data)}")
-    save_scandata_as_csv(data, 'scan_data.csv')
+    save_scandata_as_csv(data, f'scan_data{nmbr}.csv')
     pscan = proscan.ProcessScan(data)
-    pscan.map(nmbr=1, display_all_points=True)
+    pscan.map(nmbr=nmbr, display_all_points=True)
 
 def find_std_dev(datalist):
     # Standard deviation of list 
@@ -369,7 +371,17 @@ def find_clear_path(data, thresh=None):
 
 if __name__ == "__main__":
     
-    save_scan()
+    save_scan(nmbr=1)
+    heading = car.heading()
+    pid = PID(heading)
+    print(f"Driving 10 seconds at {CARSPEED} in direction {heading}")
+    start_time = time.time()
+    while time.time()-start_time < 10:
+        dist, *rest = car.go(CARSPEED, math.pi/2, spin=pid.trim())
+        print(f"Front_dist = {dist}")
+    car.stop_wheels()
+    
+    save_scan(nmbr=2)
     '''
     square_to_wall()
     
