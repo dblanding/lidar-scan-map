@@ -10,7 +10,7 @@ import proscan
 from pprint import pprint
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = omnicar.OmniCar()
@@ -34,7 +34,7 @@ class PID():
     def __init__(self, target):
         self.target = target
         self.prev_error = 0
-        self.trimval = 3
+        self.trimval = 6
 
     def trim(self):
         """Return value for spin"""
@@ -290,6 +290,7 @@ def save_scan(nmbr=None):
     print(f"total number of points: {len(data)}")
     save_scandata_as_csv(data, f'scan_data{nmbr}.csv')
     pscan = proscan.ProcessScan(data)
+    pprint(pscan.zeros)
     pscan.map(nmbr=nmbr, display_all_points=True)
 
 def find_std_dev(datalist):
@@ -374,7 +375,7 @@ if __name__ == "__main__":
     save_scan(nmbr=1)
     heading = car.heading()
     pid = PID(heading)
-    print(f"Driving 10 seconds at {CARSPEED} in direction {heading}")
+    print(f"Driving 10 seconds at speed = {CARSPEED} in direction {heading}")
     start_time = time.time()
     while time.time()-start_time < 10:
         dist, *rest = car.go(CARSPEED, math.pi/2, spin=pid.trim())

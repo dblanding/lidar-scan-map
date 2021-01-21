@@ -6,7 +6,7 @@ import sys
 import omnicar as oc
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 style.use('fivethirtyeight')
@@ -59,7 +59,7 @@ class Point():
     """Convenience structure encapsulating data point measured values
     (int type) and calculated values (float type)"""
 
-    def __init__(self, dist, enc_val, theta=0, xy=(0, 0)):
+    def __init__(self, enc_val, dist, theta=0, xy=(0, 0)):
         self.dist = dist  # integer measured distance (cm)
         self.enc_val = enc_val  # angle encoder value (int)
         self.theta = theta  # (derived) float angle wrt car (radians)
@@ -95,7 +95,8 @@ class ProcessScan():
             self.FIT = fit
         else:
             self.FIT = FIT
-        self.points = []
+        self.points = []  # point data for records with non-zero distance
+        self.zeros = []  # point data for records with zero distance
         self.regions = []
         self.segments = []
         self._generate_points(data)
@@ -114,12 +115,6 @@ class ProcessScan():
         for region in to_remove:
             self.regions.remove(region)
 
-        # Find and remove regions with only 1 point
-        for region in self.regions:
-            if region[0] == region[-1]:
-                self.regions.remove(region)
-                logger.debug("Removed a region with only 1 point")
-
     def _find_corners(self, region):
         """
         If the points in a continuous region are substantially straight &
@@ -137,7 +132,6 @@ class ProcessScan():
         corners_fwd = []
         start_idx = idx0
         while start_idx != idx1:
-            print(f"start index = {start_idx}")
             corner_idx = self._find_line_segment(start_idx, idx1)
             corners_fwd.append(corner_idx)
             start_idx = corner_idx
@@ -253,10 +247,10 @@ class ProcessScan():
 
     def _generate_points(self, data):
         """
-        From data, populate self.points list with Point objects,
-        removing any whose distance value is 0 or 1200.
+        populate self.points list with Point objects (if dist > 0)
+        populate self.zeros list with encoder_count values (if dist = 0)
 
-        data is csv: encoder_count, distance, byte_count, delta_time
+        data: (encoder_count, distance, byte_count, delta_time)
 
         encoder_count values start at 0 and increase with CW rotation.
         straight left: enc_val = self.LEV; theta = pi
@@ -264,12 +258,17 @@ class ProcessScan():
         straight right: enc_val = self.HEV; theta = 0
         (enc_cnt tops out at 32765, so no info past that)
         """
+        points = []
+        zeros = []
         for item in data:
             encoder_count, dist = item[:2]
+            pnt = Point(encoder_count, dist)
             if dist and dist <= 1200:
-                pnt = Point(dist, encoder_count)
-                self.points.append(pnt)
-        print(len(self.points))
+                points.append(pnt)
+            else:
+                zeros.append(encoder_count)
+        self.points = points
+        self.zeros = zeros
         # calculate 'theta' value of each point (for polar coords)
         for pnt in self.points:
             #theta = math.pi * 1.5 * (1 - (pnt.enc_val / 30000))
@@ -316,8 +315,8 @@ class ProcessScan():
         by straight line segments. Save as self.segments.
         """
 
-        # build a set of indices in each region
-        # representing the end points of line segments
+        # build a list of indices in each region
+        # representing the all segment end points
         all_segments = []
         for region in self.regions:
             start_idx, end_idx = region
@@ -326,9 +325,7 @@ class ProcessScan():
                 if index not in corners:
                     corners.append(index)
             corners.sort()
-            segments = []
-            for idx1, idx2 in zip(corners, corners[1:]):
-                segments.append((idx1, idx2))
+            segments = zip(corners, corners[1:])
             all_segments.extend(segments)
         self.segments = all_segments
 
