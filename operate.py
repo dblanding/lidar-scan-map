@@ -278,6 +278,14 @@ def save_scandata_as_csv(data, filename):
     with open(filename, 'w') as f:
         f.writelines(write_data)
 
+def find_std_dev(datalist):
+    # Standard deviation of list 
+    # Using sum() + list comprehension 
+    mean = sum(datalist) / len(datalist) 
+    variance = sum([((x - mean) ** 2) for x in datalist]) / len(datalist) 
+    std_dev = variance ** 0.5
+    return mean, std_dev
+
 def save_scan(nmbr=None):
     if nmbr is None:
         nmbr = ''
@@ -289,14 +297,6 @@ def save_scan(nmbr=None):
     pscan = proscan.ProcessScan(data)
     print(f"Zero Regions = {pscan.zero_regions}")
     pscan.map(nmbr=nmbr, display_all_points=True)
-
-def find_std_dev(datalist):
-    # Standard deviation of list 
-    # Using sum() + list comprehension 
-    mean = sum(datalist) / len(datalist) 
-    variance = sum([((x - mean) ** 2) for x in datalist]) / len(datalist) 
-    std_dev = variance ** 0.5
-    return mean, std_dev
 
 
 if __name__ == "__main__":

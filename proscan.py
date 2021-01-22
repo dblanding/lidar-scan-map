@@ -56,7 +56,7 @@ def p2line_dist(pt, line):
 
 def encoder_count_to_radians(enc_val):
     """
-    Convert encoder count to angle (radians) in car coord system
+    Convert encoder count to angle (radians) in car coordinate system
 
     X axis to the right, Y axis ahead
     theta = 0 along pos X axis, increaasing CCW
@@ -114,18 +114,6 @@ class ProcessScan():
         self._generate_regions()
         self._generate_segments()
         self._find_zero_regions()
-
-    def _cull_regions(self):
-        """Kind of like linting for regions..."""
-
-        # Remove regions having fewer than 4 points
-        to_remove = []
-        for region in self.regions:
-            if (region[-1] - region[0]) < 4:
-                to_remove.append(region)
-        logger.debug(f"Removed {len(to_remove)} tiny regions")
-        for region in to_remove:
-            self.regions.remove(region)
 
     def _find_corners(self, region):
         """
@@ -257,35 +245,6 @@ class ProcessScan():
         avg_dist = cum_dist / n
         return (avg_dist, cum_dsqr)
 
-    def _find_open_sectors(self, data):
-        """
-        Build a list of unobstructed 'sectors' (dist=0)
-        """
-        sectors = []
-        start_value = None
-        sector_started = False
-        for record in data:
-            enc_cnt, dist = record[:2]
-            if dist == 0:
-                if not sector_started:
-                    start_value = encoder_count_to_radians(enc_cnt)*180/math.pi
-                    sector_started = True
-                    end_value = encoder_count_to_radians(enc_cnt)*180/math.pi
-                else:
-                    end_value = encoder_count_to_radians(enc_cnt)*180/math.pi
-            else:
-                sector_started = False
-                if start_value:
-                    width = start_value - end_value
-                    sectors.append((start_value, width))
-                    start_value = 0
-                    end_value = 0
-        if start_value:
-            width = start_value - end_value
-            sectors.append((start_value, width))
-            sectors.append((start_value, width))
-        self.open_sectors = sectors
-
     def _generate_points(self, data):
         """
         populate self.points list with Point objects
@@ -343,17 +302,13 @@ class ProcessScan():
         self.regions = regions
         logger.debug(f"Regions: {self.regions}")
 
-        # Cull tiny regions
-        #self._cull_regions()
-
     def _generate_segments(self):
         """
         Within regions, detect linear sections which can be represented
         by straight line segments. Save as self.segments.
         """
 
-        # build a list of indices in each region
-        # representing the all segment end points
+        # build a list of index pairs representing segment end points
         all_segments = []
         for region in self.regions:
             start_idx, end_idx = region
