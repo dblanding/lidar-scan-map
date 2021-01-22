@@ -19,10 +19,7 @@ from_arduino = car._read_serial_data()
 logger.debug(f"Message from Arduino: {from_arduino}")
 
 W2W_DIST = 34  # separation between coaxial wheels (cm)
-PAUSE = 0.05  # sec PAUSE time needed between wheel motor commands
 CLEARANCE = 30  # threshold min clearance to wall (cm)
-MIN_LENGTH = 20  # threshold min length to end of wall (cm)
-MIN_DIST = 40  # threshold min distance from car to wall (cm)
 KP = 0.25  # steering PID proportional coefficient
 KD = 0.3  # steering PID derivative coefficient
 CARSPEED = 150  # default car speed
@@ -290,7 +287,7 @@ def save_scan(nmbr=None):
     print(f"total number of points: {len(data)}")
     save_scandata_as_csv(data, f'scan_data{nmbr}.csv')
     pscan = proscan.ProcessScan(data)
-    pprint(pscan.zeros)
+    print(f"Zero Regions = {pscan.zero_regions}")
     pscan.map(nmbr=nmbr, display_all_points=True)
 
 def find_std_dev(datalist):
@@ -301,117 +298,17 @@ def find_std_dev(datalist):
     std_dev = variance ** 0.5
     return mean, std_dev
 
-def find_outliers(datalist):
-    mean, std_dev = find_std_dev(datalist)
-    upper_threshold = mean + (3 * std_dev)
-    outliers = [value for value in datalist if value > upper_threshold]
-    return outliers
-
-def find_clear_path(data, thresh=None):
-    """Find widest open sector. Return rel heading and distance to go.
-
-    Do this by finding all contiguous regions with dist values
-    equal to zero or greater than thresh * max_dist.
-    """
-    if not thresh:
-        thresh = 0.6
-
-    # find max_dist
-    max_dist = 0
-    distlist = []  # list of dist values
-    for record in data:
-        enc_val, dist, _, _ = record
-        if dist > max_dist:
-            max_dist = dist
-        distlist.append(dist)
-    outliers = find_outliers(distlist)
-    print(f"outliers: {outliers}")
-
-    # generate overlay list, with 1 for open, 0 for not open
-    overlay = []
-    for record in data:
-        enc_val, dist, _, _ = record
-        if dist >= max_dist * thresh or dist == 0:
-            overlay.append(1)
-        else:
-            overlay.append(0)
-
-    # look for 'clumps' of contiguous open indexes
-    open_clumps = []  # (start index, end_index)
-    curr_state = False  # True is open
-    for n, val in enumerate(overlay):
-        if not curr_state and val:  # start of an open region
-            curr_state = True
-            start_index = n
-        elif curr_state and not val:  # end of an open region
-            curr_state = False
-            open_clumps.append((start_index, n))
-    print(f"open_clumps: {open_clumps}")
-
-    # find largest clump
-    maxlen = 0
-    widest = None
-    for n, clump in enumerate(open_clumps):
-        length = clump[-1] - clump[0]
-        if length > maxlen:
-            maxlen = length
-            widest = clump
-
-    # find enc_val if center of clump, dist to drive
-    start_record = data[widest[0]]
-    end_record = data[widest[-1]]
-    start_enc_val, start_dist, _, _ = start_record
-    end_enc_val, end_dist, _, _ = end_record
-    avg_enc_val = (start_enc_val + end_enc_val) / 2
-    stop_dist = (start_dist + end_dist) / 2
-    print(avg_enc_val, stop_dist)
-
-    # convert enc_val to relative heading (straight ahead = 0 deg)
-    rel_heading = (avg_enc_val - omnicar.MEV) * 90 / (omnicar.MEV - omnicar.LEV)
-    return (rel_heading, stop_dist)
 
 if __name__ == "__main__":
     
+    print(car.heading())
     save_scan(nmbr=1)
-    heading = car.heading()
-    pid = PID(heading)
-    print(f"Driving 10 seconds at speed = {CARSPEED} in direction {heading}")
+    '''
     start_time = time.time()
     while time.time()-start_time < 10:
         dist, *rest = car.go(CARSPEED, math.pi/2, spin=pid.trim())
-        print(f"Front_dist = {dist}")
     car.stop_wheels()
     
     save_scan(nmbr=2)
-    '''
-    square_to_wall()
-    
-    dist = approach_wall(CARSPEED, CLEARANCE)
-    
-    dist = drive_along_wall_to_right(CARSPEED, CLEARANCE, mapping=True)
-    
-    radius_turn_on_the_go(0, 90, CLEARANCE)
-    
-    #data = car.go(100, 0)
-    data = car.scan()
-    print(f"'Sensor data' returned from car.go() command: {data}")
-    time.sleep(1)
-    data = car.stop_wheels()
-    print(f"'Sensor data' returned from car.stop_wheels() command: {data}")
-    
-    while True:
-        print(f"Car heading = {car.heading()}")
-        data = car.scan()
-        print(f"total number of points: {len(data)}")
-        save_scandata_as_csv(data, 'scan_data.csv')
-        rel_heading, dist_to_go = find_clear_path(data)
-        print(f"relative heading: {rel_heading}, distance to drive: {dist_to_go}")
-        pscan = proscan.ProcessScan(data, gap=15)
-        pscan.map(nmbr=1, display_all_points=True)
-        turn_in_place(car.heading() + rel_heading)
-        car.go(100, math.pi/2, spin=5)
-        # goes 64 inches (162 cm) in 10 sec @ spd = 150
-        time.sleep(dist_to_go / 16)
-        car.stop_wheels()
     '''
     car.close()

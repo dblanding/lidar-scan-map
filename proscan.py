@@ -6,7 +6,7 @@ import sys
 import omnicar as oc
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 style.use('fivethirtyeight')
@@ -54,6 +54,17 @@ def p2line_dist(pt, line):
     p0 = proj_pt_on_line(line, pt)
     return p2p_dist(pt, p0)
 
+def encoder_count_to_radians(enc_val):
+    """
+    Convert encoder count to angle (radians) in car coord system
+
+    X axis to the right, Y axis ahead
+    theta = 0 along pos X axis, increaasing CCW
+    """
+    #theta = math.pi * 1.5 * (1 - (pnt.enc_val / 30000))
+    theta = (oc.HEV - enc_val) * math.pi / (oc.HEV - oc.LEV)
+    return theta
+
 
 class Point():
     """Convenience structure encapsulating data point measured values
@@ -95,13 +106,14 @@ class ProcessScan():
             self.FIT = fit
         else:
             self.FIT = FIT
-        self.points = []  # point data for records with non-zero distance
-        self.zeros = []  # point data for records with zero distance
+        self.points = []
         self.regions = []
         self.segments = []
+        self.zero_regions = []
         self._generate_points(data)
         self._generate_regions()
         self._generate_segments()
+        self._find_zero_regions()
 
     def _cull_regions(self):
         """Kind of like linting for regions..."""
@@ -245,10 +257,38 @@ class ProcessScan():
         avg_dist = cum_dist / n
         return (avg_dist, cum_dsqr)
 
+    def _find_open_sectors(self, data):
+        """
+        Build a list of unobstructed 'sectors' (dist=0)
+        """
+        sectors = []
+        start_value = None
+        sector_started = False
+        for record in data:
+            enc_cnt, dist = record[:2]
+            if dist == 0:
+                if not sector_started:
+                    start_value = encoder_count_to_radians(enc_cnt)*180/math.pi
+                    sector_started = True
+                    end_value = encoder_count_to_radians(enc_cnt)*180/math.pi
+                else:
+                    end_value = encoder_count_to_radians(enc_cnt)*180/math.pi
+            else:
+                sector_started = False
+                if start_value:
+                    width = start_value - end_value
+                    sectors.append((start_value, width))
+                    start_value = 0
+                    end_value = 0
+        if start_value:
+            width = start_value - end_value
+            sectors.append((start_value, width))
+            sectors.append((start_value, width))
+        self.open_sectors = sectors
+
     def _generate_points(self, data):
         """
-        populate self.points list with Point objects (if dist > 0)
-        populate self.zeros list with encoder_count values (if dist = 0)
+        populate self.points list with Point objects
 
         data: (encoder_count, distance, byte_count, delta_time)
 
@@ -259,27 +299,24 @@ class ProcessScan():
         (enc_cnt tops out at 32765, so no info past that)
         """
         points = []
-        zeros = []
-        for item in data:
-            encoder_count, dist = item[:2]
+        for record in data:
+            encoder_count, dist = record[:2]
             pnt = Point(encoder_count, dist)
-            if dist and dist <= 1200:
-                points.append(pnt)
-            else:
-                zeros.append(encoder_count)
+            points.append(pnt)
         self.points = points
-        self.zeros = zeros
-        # calculate 'theta' value of each point (for polar coords)
+
+        # calculate 'theta' value of each (non-zero) point
         for pnt in self.points:
-            #theta = math.pi * 1.5 * (1 - (pnt.enc_val / 30000))
-            theta = (self.HEV - pnt.enc_val) * math.pi / (self.HEV - self.LEV)
-            pnt.theta = theta
+            if pnt.dist:
+                theta = encoder_count_to_radians(pnt.enc_val)
+                pnt.theta = theta
 
         # calculate (x, y) coords from polar coords (dist, theta)
         for pnt in self.points:
-            x = pnt.dist * math.cos(pnt.theta)
-            y = pnt.dist * math.sin(pnt.theta)
-            pnt.xy = (x, y)
+            if pnt.theta:
+                x = pnt.dist * math.cos(pnt.theta)
+                y = pnt.dist * math.sin(pnt.theta)
+                pnt.xy = (x, y)
 
     def _generate_regions(self):
         """Find continuous regions of closely spaced points (clumps)
@@ -294,7 +331,7 @@ class ProcessScan():
             if pnt.enc_val < self.LEV:
                 start_index = n
             elif self.LEV <= pnt.enc_val <= self.HEV:
-                dist = p2p_dist(pnt.xy, self.points[n-1].xy)
+                dist = abs(pnt.dist - self.points[n-1].dist)
             elif pnt.enc_val > self.HEV:
                 break
             if dist > self.GAP * pnt.dist / 100:
@@ -307,7 +344,7 @@ class ProcessScan():
         logger.debug(f"Regions: {self.regions}")
 
         # Cull tiny regions
-        self._cull_regions()
+        #self._cull_regions()
 
     def _generate_segments(self):
         """
@@ -328,6 +365,18 @@ class ProcessScan():
             segments = zip(corners, corners[1:])
             all_segments.extend(segments)
         self.segments = all_segments
+
+    def _find_zero_regions(self):
+        """
+        Find regions comprised of points whose distance values = 0
+
+        Return list of indices of self.regions
+        """
+        zero_regions = []
+        for n, region in enumerate(self.regions):
+            if self.points[region[0]].dist == 0:
+                zero_regions.append(n)
+        self.zero_regions = zero_regions
 
     def _indexes_in_regions(self):
         """Return list of indexes contained in regions.
