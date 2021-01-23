@@ -5,12 +5,13 @@ import math
 import pickle
 import sys
 import time
+import geom_utils as geo
 import omnicar
 import proscan
 from pprint import pprint
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = omnicar.OmniCar()
@@ -61,7 +62,7 @@ def relative_bearing(target):
     rel_brng = int(car.heading() - delta)
     return normalize_angle(rel_brng)
 
-def turn_in_place(target):
+def turn_to(target):
     """Turn (while stopped) toward target course (degrees)."""
     target = normalize_angle(target)
     # To avoid the complication of the 360 / 0 transition,
@@ -116,20 +117,12 @@ def radius_turn_on_the_go(direction, angle, turn_radius):
         target += 360
     _turn_on_the_go(target, direction, spin_ratio)
 
-def r2p(xy_coords):
-    """Convert rect coords (x, y) to polar (r, theta)
-    with theta in degrees."""
-    x, y = xy_coords
-    r = math.sqrt(x*x + y*y)
-    theta = math.atan2(y, x) * 180 / math.pi
-    return (r, theta)
-
 def print_line_params(line_params):
     for item in line_params:
         coords, length, angle, distance = item
         p1_xy_coords, p2_xy_coords = coords
-        p1_rp_coords = r2p(p1_xy_coords)
-        p2_rp_coords = r2p(p2_xy_coords)
+        p1_rp_coords = geo.r2p(p1_xy_coords)
+        p2_rp_coords = geo.r2p(p2_xy_coords)
         print(f"P1 rect coords: ({int(p1_xy_coords[0]):.2f}, {int(p1_xy_coords[1]):.2f})")
         print(f"P2 rect coords: ({int(p2_xy_coords[0]):.2f}, {int(p2_xy_coords[1]):.2f})")
         print(f"P1 polar coords: ({int(p1_rp_coords[0]):.2f}, {p1_rp_coords[1]:.2f})")
@@ -163,7 +156,7 @@ def square_to_wall(mapping=True):
         pscan.map(nmbr=1, display_all_points=True)
 
     # Turn in place
-    turn_in_place(target)
+    turn_to(target)
     logger.debug(f"heading = {car.heading()} deg")
     
 def longest_line(line_params):
@@ -287,28 +280,120 @@ def find_std_dev(datalist):
     return mean, std_dev
 
 def save_scan(nmbr=None):
+    """
+    Scan and save data in numbered files. Return ProcessScan object.
+    """
     if nmbr is None:
         nmbr = ''
     data = car.scan()
     with open(f'scan_data{nmbr}.pkl', 'wb') as f:
         pickle.dump(data, f)
-    print(f"total number of points: {len(data)}")
+    logger.debug(f"Number of scan points: {len(data)}")
     save_scandata_as_csv(data, f'scan_data{nmbr}.csv')
     pscan = proscan.ProcessScan(data)
-    print(f"Zero Regions = {pscan.zero_regions}")
+    return pscan
+
+def scan_and_plan(nmbr=None):
+    """Scan, save data and analyze. Return course & distance to open sector.
+    """
+    R = 100  # clearance circle radius > car width (30cm)
+    if nmbr is None:
+        nmbr = ''
+    pscan = save_scan(nmbr)
+    logger.debug(f"Regions = {pscan.regions}")
+    logger.debug(f"Zero Regions = {pscan.zero_regions}")
+    
+    # find first open region
+    sector1 = pscan.zero_regions[0]
+
+    # find pnt1 (waypoint) to clear
+    pnt1_idx = pscan.regions[sector1+1][0]
+    pnt1 = pscan.points[pnt1_idx].xy
+
+    # draw circle (clearance) around pnt1
+    circle = (pnt1, R)
+
+    # find tangent points of line drawn from origin
+    p1, p2 = geo.line_tan_to_circ(circle, (0,0))
+
+    # Path to travel from origin to p2
+    r = int(geo.p2p_dist((0,0), p2))
+    theta = int(geo.p2p_angle((0,0), p2))  # w/r/t +X direction
+    course = theta - 90  # relative to +Y direction
+    
+    # print results and display map
+    logger.debug(f"Relative course: {course}")
+    logger.debug(f"Travel Distance: {r}")
+
+    pscan.map(nmbr=nmbr, display_all_points=True)
+    return course, r
+
+def scan_and_plan(nmbr=None):
+    """Scan, save data and analyze. Return course & distance to open sector.
+    """
+    if nmbr is None:
+        nmbr = ''
+    pscan = save_scan(nmbr)
+    logger.debug(f"Regions = {pscan.regions}")
+    logger.debug(f"Zero Regions = {pscan.zero_regions}")
+    '''
+    # among non-zero regions
+    regions = pscan.regions.copy()
+    if pscan.zero_regions:
+        zeros = pscan.zero_regions.copy()
+        zeros.reverse()
+        for indx in zeros:
+            regions.pop(indx)
+    '''
+    # find two longest regions
+    longest = pscan.regions_by_length()
+    print(f"Regions sorted by nmbr of points: {longest}")
+    for idx in pscan.zero_regions:
+        if idx in longest:
+            longest.remove(idx)
+    print(f"Non-zero regions sorted by nmbr of points: {longest}")
+
+    # of the two longest regions, find closer and farther
+            
+    
+    # Look for centerline of corridor between top two
+
+
+    # Path to travel from origin to p2
+    
+    # print results and display map
+
     pscan.map(nmbr=nmbr, display_all_points=True)
 
-
 if __name__ == "__main__":
-    
-    print(car.heading())
-    save_scan(nmbr=1)
     '''
+    nmbr = 2
+    pscan = save_scan(nmbr)
+    pscan.map(nmbr=nmbr, display_all_points=True)
+    '''
+    # scan & plan first leg of route
+    heading = car.heading()
+    print(f"Car initial heading = {heading}")
+    course_deg, r = scan_and_plan(nmbr=1)
+
+    # turn car to correct heading
+    turn_to(heading - course_deg)
+
+    # drive car to waypoint along prescribed path
+    drive_time = r / 16  # car travels 16 cm/sec
+    pid = PID(car.heading())
     start_time = time.time()
-    while time.time()-start_time < 10:
+    while time.time()-start_time < drive_time:
         dist, *rest = car.go(CARSPEED, math.pi/2, spin=pid.trim())
     car.stop_wheels()
+
+    # turn car back to original direction
+    turn_to(heading)
+
+    # scan & plan next leg of route
+    heading = car.heading()
+    print(f"Car final heading = {heading}")
+    course_deg, r = scan_and_plan(nmbr=2)
+
     
-    save_scan(nmbr=2)
-    '''
     car.close()

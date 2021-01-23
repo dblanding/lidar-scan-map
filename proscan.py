@@ -2,11 +2,12 @@ import logging
 import math
 import matplotlib.pyplot as plt
 from matplotlib import style
+import operator
 import sys
 import omnicar as oc
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 style.use('fivethirtyeight')
@@ -339,6 +340,17 @@ class ProcessScan():
         indexes = []
         for region in self.regions:
             indexes.extend(range(region[0], region[-1]+1))
+        return indexes
+
+    def regions_by_length(self):
+        """
+        Return list of region indexes sorted by length (longest first)
+        """
+        idx_len_pairs = [(n, region[-1]-region[0])
+                         for n, region in enumerate(self.regions)]
+        idx_len_pairs.sort(key=operator.itemgetter(1))
+        idx_len_pairs.reverse()
+        indexes = [pair[0] for pair in idx_len_pairs]
         return indexes
 
     def get_line_parameters(self):
