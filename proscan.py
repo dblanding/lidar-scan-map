@@ -353,6 +353,20 @@ class ProcessScan():
         indexes = [pair[0] for pair in idx_len_pairs]
         return indexes
 
+    def segments_in_region(self, indx):
+        """
+        Return segments in self.regions[indx] sorted longest first
+        """
+        idx_first, idx_last = self.regions[indx]
+        indexes_in_region = [n for n in range(idx_first, idx_last+1)]
+        seg_len_list = [(segment, segment[-1]-segment[0])
+                        for segment in self.segments
+                        if segment[0] in indexes_in_region]
+        seg_len_list.sort(key=operator.itemgetter(1))
+        seg_len_list.reverse()
+        seglist = [pair[0] for pair in seg_len_list]
+        return seglist
+
     def get_line_parameters(self):
         """Return a list of tuples, each tuple containing the parameters
         of the line which best fits each segment in self.segments.

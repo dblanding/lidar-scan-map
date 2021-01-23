@@ -354,7 +354,8 @@ def scan_and_plan(nmbr=None):
     print(f"Non-zero regions sorted by nmbr of points: {longest}")
 
     # of the two longest regions, find closer and farther
-            
+    print(f"Segments in region {longest[0]}: {pscan.segments_in_region(longest[0])}")
+    print(f"Segments in region {longest[1]}: {pscan.segments_in_region(longest[1])}")
     
     # Look for centerline of corridor between top two
 
