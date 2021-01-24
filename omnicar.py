@@ -238,7 +238,9 @@ class OmniCar():
         counter = ser1.in_waiting
         bytes_serial = ser1.read(9)
         if bytes_serial[0] == 0x59 and bytes_serial[1] == 0x59:
-            self.distance = bytes_serial[2] + bytes_serial[3]*256
+            distance = bytes_serial[2] + bytes_serial[3]*256
+            # subtract module to mirror distance
+            self.distance = distance - 3
             #self.strength = bytes_serial[4] + bytes_serial[5]*256
             #temperature = bytes_serial[6] + bytes_serial[7]*256
             #self.temperature = (temperature/8) - 256

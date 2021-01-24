@@ -46,7 +46,7 @@ class PID():
         self.prev_error = heading_error
         adjustment = int((p_term * KP + d_term * KD))
         self.trimval += adjustment
-        logger.debug(f"P-term: {p_term:.2f}\tD-term: {d_term:.2f}\tTrim: {self.trimval}\tHDG: {int(hdg)}")
+        #logger.debug(f"P-term: {p_term:.2f}\tD-term: {d_term:.2f}\tTrim: {self.trimval}\tHDG: {int(hdg)}")
         return self.trimval
 
 
@@ -307,27 +307,28 @@ def scan_and_plan(nmbr=None):
     logger.debug(f"Regions = {pscan.regions}")
     logger.debug(f"Zero Regions = {pscan.zero_regions}")
 
-    # find two longest non-zero regions
+    # find indexes of non-zero regions sorted by number of points
     long_regs = pscan.regions_by_length()
-    print(f"Regions sorted by nmbr of points: {long_regs}")
     for idx in pscan.zero_regions:
         long_regs.remove(idx)
 
-    # find left region and right region
+    # find just left region and right region
     long2regs = long_regs[:2]
     long2regs.sort()
     left_region, right_region = long2regs
 
-    # find the 'far' end of both regions as it will be the constriction
+    # find 'far' end of L & R regions as it will be the constriction
     left_pnt_indx = pscan.regions[left_region][-1]
     right_pnt_indx = pscan.regions[right_region][0]
 
     # find coords of each point
-    left_pnt = pscan.points[left_pnt_indx]
-    right_pnt = pscan.points[right_pnt_indx]
+    left_pnt = pscan.points[left_pnt_indx].xy
+    right_pnt = pscan.points[right_pnt_indx].xy
+    logger.debug(f"Left point: {left_pnt}")
+    logger.debug(f"Right point: {right_pnt}")
 
     # construct waypoint halfway between left and right points
-    waypnt = geo.midpoint(left_pnt.xy, right_pnt.xy)
+    waypnt = geo.midpoint(left_pnt, right_pnt)
     
     # Path to travel from origin to waypoint (in center of gap)
     r = int(geo.p2p_dist((0,0), waypnt))
@@ -341,23 +342,26 @@ def scan_and_plan(nmbr=None):
     return course, r
 
 if __name__ == "__main__":
-    nmbr = 2
+    nmbr = 0
+    while True:
+        # scan & plan first leg of route
+        nmbr += 1
+        heading = car.heading()
+        print(f"Car initial heading = {heading}")
+        course_deg, r = scan_and_plan(nmbr=nmbr)
+        proceed = input("Proceed? (y or n)")
+        if proceed == 'y':
 
-    # scan & plan first leg of route
-    heading = car.heading()
-    print(f"Car initial heading = {heading}")
-    course_deg, r = scan_and_plan(nmbr=nmbr)
+            # turn car to new heading
+            turn_to(heading - course_deg)
 
-    # turn car to correct heading
-    turn_to(heading - course_deg)
-
-    # drive car to waypoint along prescribed path
-    drive_time = r / RATE
-    pid = PID(car.heading())
-    start_time = time.time()
-    while time.time()-start_time < drive_time:
-        dist, *rest = car.go(CARSPEED, FWD, spin=pid.trim())
-    car.stop_wheels()
-    #turn_to(heading)
-
+            # drive car to waypoint along prescribed path
+            drive_time = r / RATE
+            pid = PID(car.heading())
+            start_time = time.time()
+            while time.time()-start_time < drive_time:
+                dist, *rest = car.go(CARSPEED, FWD, spin=pid.trim())
+            car.stop_wheels()
+        else:
+            break
     car.close()
