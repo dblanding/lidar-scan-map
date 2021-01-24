@@ -296,105 +296,64 @@ def save_scan(nmbr=None):
 def scan_and_plan(nmbr=None):
     """Scan, save data and analyze. Return course & distance to open sector.
     """
-    R = 100  # clearance circle radius > car width (30cm)
     if nmbr is None:
         nmbr = ''
     pscan = save_scan(nmbr)
     logger.debug(f"Regions = {pscan.regions}")
     logger.debug(f"Zero Regions = {pscan.zero_regions}")
+
+    # find two longest non-zero regions
+    long_regs = pscan.regions_by_length()
+    print(f"Regions sorted by nmbr of points: {long_regs}")
+    for idx in pscan.zero_regions:
+        long_regs.remove(idx)
+
+    # find left region and right region
+    long2regs = long_regs[:2]
+    long2regs.sort()
+    left_region, right_region = long2regs
+
+    # find the 'far' end of both regions as it will be the constriction
+    left_pnt_indx = pscan.regions[left_region][-1]
+    right_pnt_indx = pscan.regions[right_region][0]
+
+    # find coords of each point
+    left_pnt = pscan.points[left_pnt_indx]
+    right_pnt = pscan.points[right_pnt_indx]
+
+    # construct waypoint halfway between left and right points
+    waypnt = geo.midpoint(left_pnt.xy, right_pnt.xy)
     
-    # find first open region
-    sector1 = pscan.zero_regions[0]
-
-    # find pnt1 (waypoint) to clear
-    pnt1_idx = pscan.regions[sector1+1][0]
-    pnt1 = pscan.points[pnt1_idx].xy
-
-    # draw circle (clearance) around pnt1
-    circle = (pnt1, R)
-
-    # find tangent points of line drawn from origin
-    p1, p2 = geo.line_tan_to_circ(circle, (0,0))
-
-    # Path to travel from origin to p2
-    r = int(geo.p2p_dist((0,0), p2))
-    theta = int(geo.p2p_angle((0,0), p2))  # w/r/t +X direction
+    # Path to travel from origin to waypoint (in center of gap)
+    r = int(geo.p2p_dist((0,0), waypnt))
+    theta = int(geo.p2p_angle((0,0), waypnt))  # w/r/t +X direction
     course = theta - 90  # relative to +Y direction
-    
+
     # print results and display map
     logger.debug(f"Relative course: {course}")
     logger.debug(f"Travel Distance: {r}")
-
     pscan.map(nmbr=nmbr, display_all_points=True)
     return course, r
 
-def scan_and_plan(nmbr=None):
-    """Scan, save data and analyze. Return course & distance to open sector.
-    """
-    if nmbr is None:
-        nmbr = ''
-    pscan = save_scan(nmbr)
-    logger.debug(f"Regions = {pscan.regions}")
-    logger.debug(f"Zero Regions = {pscan.zero_regions}")
-    '''
-    # among non-zero regions
-    regions = pscan.regions.copy()
-    if pscan.zero_regions:
-        zeros = pscan.zero_regions.copy()
-        zeros.reverse()
-        for indx in zeros:
-            regions.pop(indx)
-    '''
-    # find two longest regions
-    longest = pscan.regions_by_length()
-    print(f"Regions sorted by nmbr of points: {longest}")
-    for idx in pscan.zero_regions:
-        if idx in longest:
-            longest.remove(idx)
-    print(f"Non-zero regions sorted by nmbr of points: {longest}")
-
-    # of the two longest regions, find closer and farther
-    print(f"Segments in region {longest[0]}: {pscan.segments_in_region(longest[0])}")
-    print(f"Segments in region {longest[1]}: {pscan.segments_in_region(longest[1])}")
-    
-    # Look for centerline of corridor between top two
-
-
-    # Path to travel from origin to p2
-    
-    # print results and display map
-
-    pscan.map(nmbr=nmbr, display_all_points=True)
-
 if __name__ == "__main__":
-    '''
-    nmbr = 2
-    pscan = save_scan(nmbr)
-    pscan.map(nmbr=nmbr, display_all_points=True)
-    '''
-    # scan & plan first leg of route
-    heading = car.heading()
-    print(f"Car initial heading = {heading}")
-    course_deg, r = scan_and_plan(nmbr=1)
+    nmbr = 0
+    while nmbr < 3:
+        nmbr += 1
+        # scan & plan first leg of route
+        heading = car.heading()
+        print(f"Car initial heading = {heading}")
+        course_deg, r = scan_and_plan(nmbr=nmbr)
 
-    # turn car to correct heading
-    turn_to(heading - course_deg)
+        # turn car to correct heading
+        turn_to(heading - course_deg)
 
-    # drive car to waypoint along prescribed path
-    drive_time = r / 16  # car travels 16 cm/sec
-    pid = PID(car.heading())
-    start_time = time.time()
-    while time.time()-start_time < drive_time:
-        dist, *rest = car.go(CARSPEED, math.pi/2, spin=pid.trim())
-    car.stop_wheels()
+        # drive car to waypoint along prescribed path
+        drive_time = r / 16  # car travels 16 cm/sec
+        pid = PID(car.heading())
+        start_time = time.time()
+        while time.time()-start_time < drive_time:
+            dist, *rest = car.go(CARSPEED, 1.66, spin=pid.trim())  # ~95deg
+        car.stop_wheels()
+        turn_to(heading)
 
-    # turn car back to original direction
-    turn_to(heading)
-
-    # scan & plan next leg of route
-    heading = car.heading()
-    print(f"Car final heading = {heading}")
-    course_deg, r = scan_and_plan(nmbr=2)
-
-    
     car.close()
