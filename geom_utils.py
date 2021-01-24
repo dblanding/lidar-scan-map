@@ -9,9 +9,9 @@ import math
 
 def p2r(r, theta):
     """Convert polar coords (r, theta) to rectangular coords (x,y)
-    theta is in radians."""
-    x = r * math.cos(theta)
-    y = r * math.sin(theta)
+    theta is in degrees."""
+    x = r * math.cos(theta * math.pi / 180)
+    y = r * math.sin(theta * math.pi / 180)
     return (x, y)
 
 def r2p(xy_coords):
@@ -64,6 +64,11 @@ def pnt_in_box_p(pnt, box):
 def midpoint(p1, p2, f=.5):
     """Return point part way (f=.5 by def) between points p1 and p2."""
     return (((p2[0]-p1[0])*f)+p1[0], ((p2[1]-p1[1])*f)+p1[1])
+
+def p2line_dist(pt, line):
+    """Return perpendicular distance between pt & line"""
+    p0 = proj_pt_on_line(line, pt)
+    return p2p_dist(pt, p0)
 
 def p2p_dist(p1, p2):
     """Return the distance between two points"""

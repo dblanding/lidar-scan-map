@@ -17,6 +17,7 @@ import smbus
 import sys
 import time
 import Adafruit_ADS1x15
+import geom_utils as geo
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
@@ -68,15 +69,6 @@ def convert_polar_to_rect(r, theta):
     y = r * math.sin(theta)
     return (x, y)
 
-def convert_rect_to_polar(x, y):
-    """Convert rectangular coords (x,y) to polar coords (r, theta)
-    theta is in radians."""
-    r = math.sqrt(x*x + y*y)
-    t = atan(y/x)
-    # arctan is tricky... add pi for quadrants 2 & 3 
-    if (x<0):
-        t += math.pi
-    return (r, t)
 
 class OmniCar():
     """Control motors & access sensors of omni-wheel car."""
@@ -178,14 +170,14 @@ class OmniCar():
         distances = self._xfer_data((0, 0, 0, 0, 0, 0))
         return distances
 
-    def go(self, speed, theta, spin=0):
-        """Drive at speed (int) in relative direction theta (rad)
+    def go(self, speed, angle, spin=0):
+        """Drive at speed (int) in relative direction angle (degrees)
         while simultaneoulsy spinning CCW at rate = spin (int).
         Return distances: [front_dist, left_dist, right_dist]"""
 
         # convert from polar coordinates to omni_car's 'natural' coords
         # where one coaxial pair of wheels drives u and the other drives v
-        u, v = convert_polar_to_rect(speed, theta - math.pi/4)
+        u, v = geo.p2r(speed, angle - 45)
 
         # motor numbers
         m1, m2, m3, m4 = (1, 2, 3, 4)

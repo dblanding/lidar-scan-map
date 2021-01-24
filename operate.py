@@ -20,11 +20,14 @@ from_arduino = car._read_serial_data()
 logger.debug(f"Message from Arduino: {from_arduino}")
 
 W2W_DIST = 34  # separation between coaxial wheels (cm)
-CLEARANCE = 30  # threshold min clearance to wall (cm)
+FWD = 95  # forward drive direction (+ 5 compensation for 'crab')
 KP = 0.25  # steering PID proportional coefficient
 KD = 0.3  # steering PID derivative coefficient
 CARSPEED = 150  # default car speed
+RATE = 16  # Car covers 16 cm/sec at CARSPEED = 150
+R = 50  # Distance margin for clearing obstructions
 EOW = 10  # Threshold End of Wall
+CLEARANCE = 30  # threshold min clearance to wall (cm)
 
 class PID():
     """Adjust trim to maintain heading using pid feedback from compass."""
@@ -86,8 +89,10 @@ def turn_to(target):
             time.sleep(0.2)
 
 def _turn_on_the_go(target, direction, spin_ratio):
-    """Turn toward target course (degrees) while going in direction.
-    (For example, direction = math.pi/2 for straight ahead.)"""
+    """
+    Turn toward target course (degrees) while going in direction.
+    (For example, direction = FWD for straight ahead.)
+    """
     target = normalize_angle(target)
     trim = CARSPEED * spin_ratio
     # To avoid the complication of the 360 / 0 transition,
@@ -185,7 +190,7 @@ def approach_wall(carspeed, clearance, mapping=False):
 
     # OK to proceed?
     if dist > clearance:
-        dist, *rest = car.go(carspeed, math.pi/2)
+        dist, *rest = car.go(carspeed, FWD)
         prev_dist = dist
         sustained_dist = (dist + prev_dist) / 2        
 
@@ -197,7 +202,7 @@ def approach_wall(carspeed, clearance, mapping=False):
 
     # continue toward wall
     while sustained_dist > clearance:  # sonar occasionally gives false low values
-        dist, *rest = car.go(carspeed, math.pi/2, spin=pid.trim())
+        dist, *rest = car.go(carspeed, FWD, spin=pid.trim())
         logger.debug(f"Dist: {int(dist)}")
         sustained_dist = (dist + prev_dist) / 2
         prev_dist = dist
@@ -336,24 +341,23 @@ def scan_and_plan(nmbr=None):
     return course, r
 
 if __name__ == "__main__":
-    nmbr = 0
-    while nmbr < 3:
-        nmbr += 1
-        # scan & plan first leg of route
-        heading = car.heading()
-        print(f"Car initial heading = {heading}")
-        course_deg, r = scan_and_plan(nmbr=nmbr)
+    nmbr = 2
 
-        # turn car to correct heading
-        turn_to(heading - course_deg)
+    # scan & plan first leg of route
+    heading = car.heading()
+    print(f"Car initial heading = {heading}")
+    course_deg, r = scan_and_plan(nmbr=nmbr)
 
-        # drive car to waypoint along prescribed path
-        drive_time = r / 16  # car travels 16 cm/sec
-        pid = PID(car.heading())
-        start_time = time.time()
-        while time.time()-start_time < drive_time:
-            dist, *rest = car.go(CARSPEED, 1.66, spin=pid.trim())  # ~95deg
-        car.stop_wheels()
-        turn_to(heading)
+    # turn car to correct heading
+    turn_to(heading - course_deg)
+
+    # drive car to waypoint along prescribed path
+    drive_time = r / RATE
+    pid = PID(car.heading())
+    start_time = time.time()
+    while time.time()-start_time < drive_time:
+        dist, *rest = car.go(CARSPEED, FWD, spin=pid.trim())
+    car.stop_wheels()
+    #turn_to(heading)
 
     car.close()

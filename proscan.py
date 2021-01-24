@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib import style
 import operator
 import sys
+import geom_utils as geo
 import omnicar as oc
 
 logger = logging.getLogger(__name__)
@@ -15,45 +16,6 @@ style.use('fivethirtyeight')
 # Default values used in ProcessScan
 GAP = 12  # Threshold distance between adjacent points for continuity
 FIT = 3  # Threshold distance (point to line) for good fit
-
-# utility functions for working with 2D points and lines
-# a point (x, y) is represented by its x, y coordinates
-# a line (a, b, c) is represented by the eqn: ax + by + c = 0
-
-def cnvrt_2pts_to_coef(pt1, pt2):
-    """Return (a,b,c) coef of line defined by 2 (x,y) pts."""
-    x1, y1 = pt1
-    x2, y2 = pt2
-    a = y2 - y1
-    b = x1 - x2
-    c = x2*y1-x1*y2
-    return (a, b, c)
-
-def proj_pt_on_line(line, pt):
-    """Return point which is the projection of pt on line."""
-    a, b, c = line
-    x, y = pt
-    denom = a**2 + b**2
-    if not denom:
-        return pt
-    xp = (b**2*x - a*b*y -a*c)/denom
-    yp = (a**2*y - a*b*x -b*c)/denom
-    return (xp, yp)
-
-def p2p_dist(p1, p2):
-    """Return the distance between two points"""
-    x, y = p1
-    u, v = p2
-    return math.sqrt((x-u)**2 + (y-v)**2)
-
-def p2p_angle(p0, p1):
-    """Return angle (degrees) from p0 to p1."""
-    return math.atan2(p1[1]-p0[1], p1[0]-p0[0])*180/math.pi
-
-def p2line_dist(pt, line):
-    """Return perpendicular distance between pt & line"""
-    p0 = proj_pt_on_line(line, pt)
-    return p2p_dist(pt, p0)
 
 def encoder_count_to_radians(enc_val):
     """
@@ -181,8 +143,8 @@ class ProcessScan():
                 istop -= 1
                 if istop < end_idx:
                     break
-            line = cnvrt_2pts_to_coef(self.points[istrt].xy,
-                                      self.points[istop].xy)
+            line = geo.cnvrt_2pts_to_coef(self.points[istrt].xy,
+                                          self.points[istop].xy)
             avg_dist, cum_dsqr = self._find_sum_of_sq_dist_to_line(line,
                                                                    istrt,
                                                                    istop)
@@ -222,7 +184,7 @@ class ProcessScan():
         indexlist = [indx for indx in range(indx0, indx1)]
         slopelist = []
         for indx in indexlist:
-            slope = proscan.p2p_angle(points[indx].xy, points[indx + 1].xy)
+            slope = geo.p2p_angle(points[indx].xy, points[indx + 1].xy)
             slopelist.append(slope)
         return zip(indexlist, slopelist)
 
@@ -238,7 +200,7 @@ class ProcessScan():
             indx1, indx0 = indx0, indx1
         for idx in range(indx0, indx1):
             pnt = self.points[idx].xy
-            dist = p2line_dist(pnt, line)
+            dist = geo.p2line_dist(pnt, line)
             dsqr = dist * dist
             cum_dist += dist
             cum_dsqr += dsqr
@@ -378,11 +340,11 @@ class ProcessScan():
             end_idx = segment[1]
             start_coords = self.points[start_idx].xy
             end_coords = self.points[end_idx].xy
-            line = cnvrt_2pts_to_coef(start_coords, end_coords)
+            line = geo.cnvrt_2pts_to_coef(start_coords, end_coords)
             coords = (start_coords, end_coords)
-            length = p2p_dist(start_coords, end_coords)
-            angle = p2p_angle(start_coords, end_coords)
-            dist = p2line_dist((0, 0), line)  # perp distance to line
+            length = geo.p2p_dist(start_coords, end_coords)
+            angle = geo.p2p_angle(start_coords, end_coords)
+            dist = geo.p2line_dist((0, 0), line)  # perp distance to line
             linelist.append((coords, length, angle, dist))
         return linelist
 
