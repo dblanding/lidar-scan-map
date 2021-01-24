@@ -315,7 +315,11 @@ def scan_and_plan(nmbr=None):
     # find just left region and right region
     long2regs = long_regs[:2]
     long2regs.sort()
-    left_region, right_region = long2regs
+    try:
+        left_region, right_region = long2regs
+    except ValueError:
+        pscan.map(nmbr=nmbr, display_all_points=True)
+        return 0, 0
 
     # find 'far' end of L & R regions as it will be the constriction
     left_pnt_indx = pscan.regions[left_region][-1]

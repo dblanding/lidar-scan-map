@@ -23,9 +23,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
-LEV = 10400  # Low Encoder Value (car -X direction)
-HEV = 30400  # High Encoder Value (car +X direction)
+LEV = 10000  # Low Encoder Value (car -X direction)
+HEV = 30000  # High Encoder Value (car +X direction)
 MEV = (HEV + LEV)//2  # Mid Encoder Value (car +Y direction)
+VLEG = 3  # optical path length of vetical leg (cm)
 
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain
@@ -240,7 +241,7 @@ class OmniCar():
         if bytes_serial[0] == 0x59 and bytes_serial[1] == 0x59:
             distance = bytes_serial[2] + bytes_serial[3]*256
             # subtract module to mirror distance
-            self.distance = distance - 3
+            self.distance = distance - VLEG
             #self.strength = bytes_serial[4] + bytes_serial[5]*256
             #temperature = bytes_serial[6] + bytes_serial[7]*256
             #self.temperature = (temperature/8) - 256

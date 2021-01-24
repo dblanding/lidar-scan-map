@@ -292,7 +292,7 @@ class ProcessScan():
         """
         zero_regions = []
         for n, region in enumerate(self.regions):
-            if self.points[region[0]].dist == 0:
+            if self.points[region[0]].dist == oc.-VLEG:
                 zero_regions.append(n)
         self.zero_regions = zero_regions
 
