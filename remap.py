@@ -13,7 +13,7 @@ def remap(nmbr):
     filename = f'scan_data{nmbr}.pkl'
     with open(filename, 'rb') as file:
         data = pickle.load(file)
-
+    pprint.pprint(data)
     pscan = proscan.ProcessScan(data)
     #pprint.pprint(pscan.get_line_parameters())
     pscan.map(nmbr=nmbr, display_all_points=True)

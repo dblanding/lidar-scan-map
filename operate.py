@@ -6,7 +6,7 @@ import pickle
 import sys
 import time
 import geom_utils as geo
-import omnicar
+import omnicar as oc
 import proscan
 from pprint import pprint
 
@@ -14,20 +14,23 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
-car = omnicar.OmniCar()
+car = oc.OmniCar()
 time.sleep(0.5)
 from_arduino = car._read_serial_data()
 logger.debug(f"Message from Arduino: {from_arduino}")
 
 W2W_DIST = 34  # separation between coaxial wheels (cm)
-FWD = 95  # forward drive direction (+ 5 compensation for 'crab')
+FWD = 95  # forward drive direction (incl +5 'crab' compensation)
+LFT = 180  # left drive direction
+REV = 270  # reverse drive direction
+RGT = 0  # right drive direction
 KP = 0.25  # steering PID proportional coefficient
 KD = 0.3  # steering PID derivative coefficient
 CARSPEED = 150  # default car speed
 RATE = 16  # Car covers 16 cm/sec at CARSPEED = 150
 R = 50  # Distance margin for clearing obstructions
 EOW = 10  # Threshold End of Wall
-CLEARANCE = 30  # threshold min clearance to wall (cm)
+CLEARANCE = 30  # nominal wall clearance (cm)
 
 class PID():
     """Adjust trim to maintain heading using pid feedback from compass."""
@@ -114,7 +117,7 @@ def _turn_on_the_go(target, direction, spin_ratio):
 
 def radius_turn_on_the_go(direction, angle, turn_radius):
     """Turn car angle degrees (CCW positive) at turn_radius (cm)
-    while underway in direction (eg: 0 or pi/2)."""
+    while underway in direction (eg: LFT, FWD or RGT)."""
     spin_ratio = (W2W_DIST / 2 / turn_radius) / math.sqrt(2)
     trim = CARSPEED * spin_ratio
     target = car.heading() - angle
@@ -137,14 +140,12 @@ def print_line_params(line_params):
         print(f"distance: {distance:.2f} cm")
         print()
 
-def square_to_wall(mapping=True):
+def square_to_wall(nmbr=0, mapping=True):
     """Spin car to square to wall that is roughly in front."""
 
     # get scan line(s)
-    data = car.scan(lev=17500, hev=22500)
-    pscan = proscan.ProcessScan(data)
+    pscan = save_scan(nmbr=nmbr, lev=17500, hev=22500)
     line_params = pscan.get_line_parameters()
-    print(len(data))
     print(f"line parameters: {line_params}")
     # Examine first line found
     coords, length, angle, dist = line_params[0]
@@ -158,7 +159,7 @@ def square_to_wall(mapping=True):
     
     # display and save initial map
     if mapping:
-        pscan.map(nmbr=1, display_all_points=True)
+        pscan.map(nmbr=nmbr, display_all_points=True)
 
     # Turn in place
     turn_to(target)
@@ -174,19 +175,18 @@ def longest_line(line_params):
             max_len = length
     return line_params[idx]
 
-def approach_wall(carspeed, clearance, mapping=False):
+def approach_wall(carspeed, clearance, nmbr=1, mapping=False):
     """Approach wall squarely at carspeed until distance to wall < clearance.
     trim course to maintain current compass heading."""
 
     # get scan line(s)
-    data = car.scan(lev=17500, hev=22500)
-    pscan = proscan.ProcessScan(data)
+    pscan = save_scan(nmbr=nmbr, lev=17500, hev=22500)
     line_params = pscan.get_line_parameters()
     coords, length, angle, dist = longest_line(line_params)
 
     # display and save initial map
     if mapping:
-        pscan.map(nmbr=1, display_all_points=True)
+        pscan.map(nmbr=nmbr, display_all_points=True)
 
     # OK to proceed?
     if dist > clearance:
@@ -195,15 +195,16 @@ def approach_wall(carspeed, clearance, mapping=False):
         sustained_dist = (dist + prev_dist) / 2        
 
     # instantiate PID steering
-    target_heading = car.heading()
-    pid = PID(target_heading)
+    target = int(car.heading())
+    pid = PID(target)
     logger.debug("")
-    logger.debug(f"Approach wall to dist < {clearance}, target heading = {int(target_heading)}")
+    logger.debug(f"Approach wall to dist: {clearance}, target heading = {target}")
 
     # continue toward wall
+    logger.debug("Distance")
     while sustained_dist > clearance:  # sonar occasionally gives false low values
         dist, *rest = car.go(carspeed, FWD, spin=pid.trim())
-        logger.debug(f"Dist: {int(dist)}")
+        logger.debug(dist)
         sustained_dist = (dist + prev_dist) / 2
         prev_dist = dist
 
@@ -226,7 +227,7 @@ def drive_along_wall_to_right(carspeed, clearance, mapping=False):
 
     # OK to proceed?
     if end_of_wall > EOW:
-        car.go(carspeed, 0)
+        car.go(carspeed, RGT)
 
     # initialize pid steering
     target_heading = car.heading()
@@ -242,7 +243,7 @@ def drive_along_wall_to_right(carspeed, clearance, mapping=False):
         line_params = pscan.get_line_parameters()
         coords, length, angle, dist = longest_line(line_params)
         end_of_wall = coords[-1][0]  # x coordinate of right end of wall
-        car.go(carspeed, 0, spin=pid.trim())
+        car.go(carspeed, RGT, spin=pid.trim())
         logger.debug(f"Dist: {int(dist)}\tAngle: {angle:.2f}\tEOW: {end_of_wall:.2f}")
 
     car.stop_wheels()
@@ -284,13 +285,13 @@ def find_std_dev(datalist):
     std_dev = variance ** 0.5
     return mean, std_dev
 
-def save_scan(nmbr=None):
+def save_scan(nmbr=None, lev=oc.LEV, hev=oc.HEV):
     """
     Scan and save data in numbered files. Return ProcessScan object.
     """
     if nmbr is None:
         nmbr = ''
-    data = car.scan()
+    data = car.scan(lev=lev, hev=hev)
     with open(f'scan_data{nmbr}.pkl', 'wb') as f:
         pickle.dump(data, f)
     logger.debug(f"Number of scan points: {len(data)}")
@@ -346,6 +347,7 @@ def scan_and_plan(nmbr=None):
     return course, r
 
 if __name__ == "__main__":
+    '''
     nmbr = 0
     while True:
         # scan & plan first leg of route
@@ -368,4 +370,9 @@ if __name__ == "__main__":
             car.stop_wheels()
         else:
             break
+    '''
+    nmbr = 0
+    square_to_wall()
+    approach_wall(CARSPEED, CLEARANCE, mapping=True)
+
     car.close()

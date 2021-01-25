@@ -21,10 +21,9 @@ def encoder_count_to_radians(enc_val):
     """
     Convert encoder count to angle (radians) in car coordinate system
 
-    X axis to the right, Y axis ahead
-    theta = 0 along pos X axis, increaasing CCW
+    X axis to the right, Y axis straight ahead
+    theta = 0 along positive X axis, increaasing CCW
     """
-    #theta = math.pi * 1.5 * (1 - (pnt.enc_val / 30000))
     theta = (oc.HEV - enc_val) * math.pi / (oc.HEV - oc.LEV)
     return theta
 
@@ -292,7 +291,7 @@ class ProcessScan():
         """
         zero_regions = []
         for n, region in enumerate(self.regions):
-            if self.points[region[0]].dist == oc.-VLEG:
+            if self.points[region[0]].dist == -oc.VLEG:
                 zero_regions.append(n)
         self.zero_regions = zero_regions
 

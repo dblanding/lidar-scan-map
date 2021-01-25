@@ -63,13 +63,6 @@ X_AXIS_H = 0x03  # Address of X-axis MSB data register
 Z_AXIS_H = 0x05  # Address of Z-axis MSB data register
 Y_AXIS_H = 0x07  # Address of Y-axis MSB data register
 
-def convert_polar_to_rect(r, theta):
-    """Convert polar coords (r, theta) to rectangular coords (x,y)
-    theta is in radians."""
-    x = r * math.cos(theta)
-    y = r * math.sin(theta)
-    return (x, y)
-
 
 class OmniCar():
     """Control motors & access sensors of omni-wheel car."""
@@ -223,6 +216,24 @@ class OmniCar():
         distances = self._xfer_data((1, 0, 0, 0, 0, 0))
         return distances
 
+    def resync(self):
+        """
+        Resync read with serial data by reading one byte at a time
+        looking for a pair of start bytes, then reading next 7 bytes.
+        """
+        first = False
+        n = 0
+        while True:
+            n += 1
+            bytes_serial = ser1.read(1)
+            if bytes_serial[0] == 0x59 and not first:
+                first = True
+            elif bytes_serial[0] == 0x59 and first:
+                _ = ser1.read(7)
+                n += 7
+                break
+        print(f"Number of bytes read to resync = {n}")
+
     def read_dist(self):
         """Set self.distance = distance (cm) read from lidar module.
         Return number of bytes waiting on serial port when read.
@@ -245,6 +256,9 @@ class OmniCar():
             #self.strength = bytes_serial[4] + bytes_serial[5]*256
             #temperature = bytes_serial[6] + bytes_serial[7]*256
             #self.temperature = (temperature/8) - 256
+        else:  # read out of sync with data
+            print("LiDAR read being re-synced")
+            self.resync()
         return counter
 
     def get_enc_val(self):
@@ -273,6 +287,8 @@ class OmniCar():
             distance read by LiDAR module (cm),
             number of bytes waiting in input buffer at time of read,
             time since previous read (sec)
+
+        Sometimes, data reading get outs of sync and
         """
         enc_val = self.get_enc_val()
         # If scan rotor isn't near BDC (back dead cntr), go to BDC
