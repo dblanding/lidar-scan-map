@@ -328,24 +328,23 @@ class ProcessScan():
         seglist = [pair[0] for pair in seg_len_list]
         return seglist
 
-    def get_line_parameters(self):
-        """Return a list of tuples, each tuple containing the parameters
-        of the line which best fits each segment in self.segments.
+    def get_line_parameters(self, segment):
+        """Return a tuple of the parameters of line segment.
+
+        segment is a tuple of the inexes of the segment end points
+
         parameter acronym: 'clad' for (coords, length, angle, distance)
         """
-        linelist = []
-        for segment in self.segments:
-            start_idx = segment[0]
-            end_idx = segment[1]
-            start_coords = self.points[start_idx].xy
-            end_coords = self.points[end_idx].xy
-            line = geo.cnvrt_2pts_to_coef(start_coords, end_coords)
-            coords = (start_coords, end_coords)
-            length = geo.p2p_dist(start_coords, end_coords)
-            angle = geo.p2p_angle(start_coords, end_coords)
-            dist = geo.p2line_dist((0, 0), line)  # perp distance to line
-            linelist.append((coords, length, angle, dist))
-        return linelist
+        start_idx = segment[0]
+        end_idx = segment[1]
+        start_coords = self.points[start_idx].xy
+        end_coords = self.points[end_idx].xy
+        line = geo.cnvrt_2pts_to_coef(start_coords, end_coords)
+        coords = (start_coords, end_coords)
+        length = geo.p2p_dist(start_coords, end_coords)
+        angle = geo.p2p_angle(start_coords, end_coords)
+        dist = geo.p2line_dist((0, 0), line)  # perp distance to line
+        return (coords, length, angle, dist)
 
     def map(self, map_folder="Maps", nmbr=None, show=True,
             display_all_points=False):

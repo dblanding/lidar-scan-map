@@ -143,15 +143,14 @@ def print_line_params(line_params):
 def square_to_wall(nmbr=0, mapping=True):
     """Spin car to square to wall that is roughly in front."""
 
-    # get scan line(s)
+    # scan and find most salient line
     pscan = save_scan(nmbr=nmbr, lev=17500, hev=22500)
-    line_params = pscan.get_line_parameters()
-    print(f"line parameters: {line_params}")
-    # Examine first line found
-    coords, length, angle, dist = line_params[0]
+    longest_region_idx = pscan.regions_by_length()[0]
+    longest_segment = pscan.segments_in_region(longest_region_idx)[0]
 
-    # Examine first line found
-    coords, length, angle, dist = line_params[0]
+    # parameters of line
+    line_params = pscan.get_line_parameters(longest_segment)
+    coords, length, angle, dist = line_params
     logger.debug(f"angle = {angle} degrees")
     logger.debug(f"heading = {car.heading()} degrees")
     target = car.heading() - angle
@@ -165,25 +164,23 @@ def square_to_wall(nmbr=0, mapping=True):
     turn_to(target)
     logger.debug(f"heading = {car.heading()} deg")
     
-def longest_line(line_params):
-    max_len = 0
-    idx = 0
-    for n, line in enumerate(line_params):
-        coords, length, angle, dist = line
-        if length > max_len:
-            idx = n
-            max_len = length
-    return line_params[idx]
-
 def approach_wall(carspeed, clearance, nmbr=1, mapping=False):
     """Approach wall squarely at carspeed until distance to wall < clearance.
     trim course to maintain current compass heading."""
 
-    # get scan line(s)
+    # scan and find most salient line
     pscan = save_scan(nmbr=nmbr, lev=17500, hev=22500)
-    line_params = pscan.get_line_parameters()
-    coords, length, angle, dist = longest_line(line_params)
+    longest_region_idx = pscan.regions_by_length()[0]
+    longest_segment = pscan.segments_in_region(longest_region_idx)[0]
 
+    # parameters of line
+    line_params = pscan.get_line_parameters(longest_segment)
+    coords, length, angle, dist = line_params
+    logger.debug(f"angle = {angle} degrees")
+    logger.debug(f"heading = {car.heading()} degrees")
+    target = car.heading() - angle
+    logger.debug(f"target = {target} degrees")
+    
     # display and save initial map
     if mapping:
         pscan.map(nmbr=nmbr, display_all_points=True)
@@ -210,38 +207,48 @@ def approach_wall(carspeed, clearance, nmbr=1, mapping=False):
 
     car.stop_wheels()
 
-def drive_along_wall_to_right(carspeed, clearance, mapping=False):
+def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=False):
     """Drive to right maintaining clearance to wall in front. Stop at end.
     Return dist value at end."""
 
-    # get scan line(s)
-    data = car.scan(lev=17500, hev=22500)
-    pscan = proscan.ProcessScan(data)
-    line_params = pscan.get_line_parameters()
-    coords, length, angle, dist = longest_line(line_params)
-    end_of_wall = coords[-1][0]  # x coordinate of right end of wall
+    # scan and find most salient line
+    pscan = save_scan(nmbr=nmbr, lev=17500, hev=22500)
+    longest_region_idx = pscan.regions_by_length()[0]
+    longest_segment = pscan.segments_in_region(longest_region_idx)[0]
 
+    # parameters of line
+    line_params = pscan.get_line_parameters(longest_segment)
+    coords, length, angle, dist = line_params
+    end_of_wall = coords[-1][0]  # x coordinate of right end of wall
+    logger.debug(f"angle = {angle} degrees")
+    logger.debug(f"heading = {car.heading()} degrees")
+    target = car.heading() - angle
+    logger.debug(f"target = {target} degrees")
+    
     # display and save initial map
     if mapping:
-        pscan.map(nmbr=2, display_all_points=True)
+        pscan.map(nmbr=nmbr, display_all_points=True)
 
     # OK to proceed?
     if end_of_wall > EOW:
         car.go(carspeed, RGT)
 
     # initialize pid steering
-    target_heading = car.heading()
+    target_heading = int(car.heading())
     pid = PID(target_heading)
     logger.debug("")
-    logger.debug(f"Drive right until end of wall < {EOW}, target heading = {int(target_heading)}")
+    logger.debug(f"Drive right until end of wall < {EOW}, target heading = {target_heading}")
 
     # continue to end of wall
     while end_of_wall > EOW:
-        # get scan line(s)
-        data = car.scan(lev=17500, hev=22500)
-        pscan = proscan.ProcessScan(data)
-        line_params = pscan.get_line_parameters()
-        coords, length, angle, dist = longest_line(line_params)
+        # scan and find most salient line
+        pscan = save_scan(nmbr=nmbr+1, lev=17500, hev=22500)
+        longest_region_idx = pscan.regions_by_length()[0]
+        longest_segment = pscan.segments_in_region(longest_region_idx)[0]
+
+        # parameters of line
+        line_params = pscan.get_line_parameters(longest_segment)
+        coords, length, angle, dist = line_params
         end_of_wall = coords[-1][0]  # x coordinate of right end of wall
         car.go(carspeed, RGT, spin=pid.trim())
         logger.debug(f"Dist: {int(dist)}\tAngle: {angle:.2f}\tEOW: {end_of_wall:.2f}")
@@ -250,7 +257,7 @@ def drive_along_wall_to_right(carspeed, clearance, mapping=False):
 
     # display and save final map
     if mapping:
-        pscan.map(nmbr=3, display_all_points=False)
+        pscan.map(nmbr=nmbr+1, display_all_points=False)
     return dist
 
 def round_corner(speed, turn_radius):
@@ -373,6 +380,7 @@ if __name__ == "__main__":
     '''
     nmbr = 0
     square_to_wall()
-    approach_wall(CARSPEED, CLEARANCE, mapping=True)
-
+    approach_wall(CARSPEED, CLEARANCE)
+    square_to_wall()
+    drive_along_wall_to_right(CARSPEED, CLEARANCE, mapping=True)
     car.close()

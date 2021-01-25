@@ -261,6 +261,33 @@ class OmniCar():
             self.resync()
         return counter
 
+    def read_dist(self):
+        """Set self.distance = distance (cm) read from lidar module.
+        Return number of bytes waiting on serial port when read.
+        """
+        # Prior to first read, purge buildup of 'stale' data
+        if ser1.in_waiting > 100:
+            ser1.reset_input_buffer()
+
+        # Wait for serial port to accumulate 9 bytes of 'fresh' data
+        while ser1.in_waiting < 9:
+            time.sleep(.0005)
+
+        # Now read 9 bytes of data on serial port
+        counter = ser1.in_waiting
+        bytes_serial = ser1.read(9)
+        if bytes_serial[0] == 0x59 and bytes_serial[1] == 0x59:
+            distance = bytes_serial[2] + bytes_serial[3]*256
+            # subtract module to mirror distance
+            self.distance = distance - VLEG
+            #self.strength = bytes_serial[4] + bytes_serial[5]*256
+            #temperature = bytes_serial[6] + bytes_serial[7]*256
+            #self.temperature = (temperature/8) - 256
+        else:  # read out of sync with data
+            print("LiDAR read being re-synced")
+            self.resync()
+        return counter
+
     def get_enc_val(self):
         """Return encoder value from LiDAR rotor angular encoder."""
         return adc.read_adc(0, gain=GAIN, data_rate=250)
@@ -305,8 +332,8 @@ class OmniCar():
         data = []
         while enc_val < 32767:  # continue as values increase to max
             enc_val = self.get_enc_val()
+            counter = self.read_dist()
             if lev < enc_val < hev:
-                counter = self.read_dist()
                 now = time.time()
                 delta_t = str(now - last_time)
                 last_time = now
