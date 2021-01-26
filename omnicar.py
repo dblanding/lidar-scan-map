@@ -232,10 +232,10 @@ class OmniCar():
                 _ = ser1.read(7)
                 n += 7
                 break
-        print(f"Number of bytes read to resync = {n}")
+        logger.debug(f"Number of bytes read to resync = {n}")
 
     def read_dist(self):
-        """Set self.distance = distance (cm) read from lidar module.
+        """Read lidar module distance (cm), update self.distance
         Return number of bytes waiting on serial port when read.
         """
         # Prior to first read, purge buildup of 'stale' data
@@ -257,34 +257,7 @@ class OmniCar():
             #temperature = bytes_serial[6] + bytes_serial[7]*256
             #self.temperature = (temperature/8) - 256
         else:  # read out of sync with data
-            print("LiDAR read being re-synced")
-            self.resync()
-        return counter
-
-    def read_dist(self):
-        """Set self.distance = distance (cm) read from lidar module.
-        Return number of bytes waiting on serial port when read.
-        """
-        # Prior to first read, purge buildup of 'stale' data
-        if ser1.in_waiting > 100:
-            ser1.reset_input_buffer()
-
-        # Wait for serial port to accumulate 9 bytes of 'fresh' data
-        while ser1.in_waiting < 9:
-            time.sleep(.0005)
-
-        # Now read 9 bytes of data on serial port
-        counter = ser1.in_waiting
-        bytes_serial = ser1.read(9)
-        if bytes_serial[0] == 0x59 and bytes_serial[1] == 0x59:
-            distance = bytes_serial[2] + bytes_serial[3]*256
-            # subtract module to mirror distance
-            self.distance = distance - VLEG
-            #self.strength = bytes_serial[4] + bytes_serial[5]*256
-            #temperature = bytes_serial[6] + bytes_serial[7]*256
-            #self.temperature = (temperature/8) - 256
-        else:  # read out of sync with data
-            print("LiDAR read being re-synced")
+            logger.debug("LiDAR read being re-synced")
             self.resync()
         return counter
 

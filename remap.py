@@ -10,7 +10,7 @@ def remap(nmbr):
     """
     Read saved datafile 'nmbr' and replot map
     """
-    filename = f'scan_data{nmbr}.pkl'
+    filename = f'Data/scan_data{nmbr}.pkl'
     with open(filename, 'rb') as file:
         data = pickle.load(file)
     pprint.pprint(data)
