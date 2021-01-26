@@ -20,6 +20,7 @@ from_arduino = car._read_serial_data()
 logger.debug(f"Message from Arduino: {from_arduino}")
 
 W2W_DIST = 34  # separation between coaxial wheels (cm)
+SONAR_LIDAR_OFFSET = 15  # offset distance between sonar & lidar
 FWD = 95  # forward drive direction (incl +5 'crab' compensation)
 LFT = 180  # left drive direction
 REV = 270  # reverse drive direction
@@ -27,7 +28,7 @@ RGT = 0  # right drive direction
 KP = 0.25  # steering PID proportional coefficient
 KD = 0.3  # steering PID derivative coefficient
 CARSPEED = 150  # default car speed
-RATE = 14  # cm/sec traveled by car @ CARSPEED = 150
+RATE = 13.5  # cm/sec traveled by car @ CARSPEED = 150
 R = 50  # Distance margin for clearing obstructions
 EOW = 10  # Threshold End of Wall
 CLEARANCE = 40  # nominal wall clearance (cm)
@@ -166,9 +167,8 @@ def square_to_wall(nmbr=0, mapping=True):
     
 def approach_wall(carspeed, clearance, nmbr=1, mapping=False):
     """
-    Approach wall at carspeed while monitoring sonar disance to wall
-    and trimming course to maintain current compass heading.
-    Stop when distance to wall < clearance.
+    Approach wall at carspeed while trimming course to maintain initial
+    compass heading. Stop when distance to wall reaches clearance.
     """
 
     # scan and get parameters of most salient line
@@ -178,33 +178,35 @@ def approach_wall(carspeed, clearance, nmbr=1, mapping=False):
     line_params = pscan.get_line_parameters(longest_segment)
     coords, length, angle, dist = line_params
 
+    # Calculate distance & time to reach target location
+    dist_to_travel = dist - clearance
+    time_to_travel = dist_to_travel / RATE
+
     # display and save initial map
     if mapping:
         pscan.map(nmbr=nmbr, display_all_points=True)
 
     # OK to proceed?
     if dist > clearance:
-        dist, *rest = car.go(carspeed, FWD)
-        prev_dist = dist
-        sustained_dist = (dist + prev_dist) / 2        
 
-    # instantiate PID steering
-    target = int(car.heading())
-    pid = PID(target)
-    logger.debug("")
-    msg = f"Approaching wall to dist: {clearance}, target heading = {target}"
-    logger.debug(msg)
+        # instantiate PID steering
+        target = int(car.heading())
+        pid = PID(target)
+        logger.debug("")
+        msg = f"Approaching wall to dist: {clearance}, target heading = {target}"
+        logger.debug(msg)
 
-    # continue toward wall
-    logger.debug("Distance,\tTime")
-    start = time.time()
-    while sustained_dist > clearance:  # ignore occasional false low values
-        Time = time.time() - start
-        dist, *rest = car.go(carspeed, FWD, spin=pid.trim())
-        logger.debug(f"{dist}\t{Time}")
-        sustained_dist = (dist + prev_dist) / 2
-        prev_dist = dist
-    car.stop_wheels()
+        # continue toward wall
+        start = time.time()
+        delta_t = 0
+        logger.debug("Dist:\tTime:")
+        while delta_t < time_to_travel:
+            delta_t = time.time() - start
+            sonardist, *rest = car.go(carspeed, FWD, spin=pid.trim())
+            logger.debug(f"{sonardist}\t{delta_t}")
+        car.stop_wheels()
+    else:
+        print(f"Already within {int(dist)}cm of wall")
 
 def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=False):
     """
@@ -397,4 +399,7 @@ if __name__ == "__main__":
     square_to_wall()
     approach_wall(CARSPEED, CLEARANCE)
     dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)  #, mapping=True)
+    radius_turn_on_the_go(RGT, 90, dist)
+    dist = car.get_sensor_data()
+    print(dist)
     car.close()
