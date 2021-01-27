@@ -145,7 +145,8 @@ def square_to_wall(nmbr=0, mapping=True):
     """Spin car to square with wall that is roughly in front."""
 
     # scan and get parameters of most salient line
-    pscan = save_scan(nmbr=nmbr, lev=17500, hev=22500)
+    data = save_scan(nmbr=nmbr)
+    pscan = proscan.ProcessScan(data, lev=17500, hev=22500)
     longest_region_idx = pscan.regions_by_length()[0]
     longest_segment = pscan.segments_in_region(longest_region_idx)[0]
     line_params = pscan.get_line_parameters(longest_segment)
@@ -159,20 +160,21 @@ def square_to_wall(nmbr=0, mapping=True):
     
     # display and save initial map
     if mapping:
-        pscan.map(nmbr=nmbr, display_all_points=True)
+        pscan.map(seq_nmbr=nmbr, display_all_points=True)
 
     # Turn in place to target heading
     turn_to(target)
     logger.debug(f"heading = {car.heading()} deg")
     
-def approach_wall(carspeed, clearance, nmbr=1, mapping=False):
+def approach_wall(carspeed, clearance, nmbr=1, mapping=True):
     """
     Approach wall at carspeed while trimming course to maintain initial
     compass heading. Stop when distance to wall reaches clearance.
     """
 
     # scan and get parameters of most salient line
-    pscan = save_scan(nmbr=nmbr, lev=17500, hev=22500)
+    data = save_scan(nmbr=nmbr)
+    pscan = proscan.ProcessScan(data, lev=17500, hev=22500)
     longest_region_idx = pscan.regions_by_length()[0]
     longest_segment = pscan.segments_in_region(longest_region_idx)[0]
     line_params = pscan.get_line_parameters(longest_segment)
@@ -184,7 +186,7 @@ def approach_wall(carspeed, clearance, nmbr=1, mapping=False):
 
     # display and save initial map
     if mapping:
-        pscan.map(nmbr=nmbr, display_all_points=True)
+        pscan.map(seq_nmbr=nmbr, display_all_points=True)
 
     # OK to proceed?
     if dist > clearance:
@@ -208,30 +210,26 @@ def approach_wall(carspeed, clearance, nmbr=1, mapping=False):
     else:
         print(f"Already within {int(dist)}cm of wall")
 
-def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=False):
+def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=True):
     """
     Drive to right maintaining clearance to wall in front. Stop at end.
     Return dist value at end."""
 
-    # scan and find 2 most salient regions
-    pscan = save_scan(nmbr=nmbr, lev=17500, hev=22500)
-    longest_regions = pscan.regions_by_length()[:2]
-
-    # choose left-most region
-    longest_regions.sort()  # sorts by value of index
-    region_idx = longest_regions[0]
-
-    # get parameters of most salient line in region
-    segment = pscan.segments_in_region(region_idx)[0]
-    line_params = pscan.get_line_parameters(segment)
+    # scan and get parameters of most salient line
+    data = save_scan(nmbr=nmbr)
+    pscan = proscan.ProcessScan(data, lev=17500, hev=22500)
+    longest_region_idx = pscan.regions_by_length()[0]
+    longest_segment = pscan.segments_in_region(longest_region_idx)[0]
+    line_params = pscan.get_line_parameters(longest_segment)
     coords, length, angle, dist = line_params
 
     # X coordinate of right end of wall
     end_of_wall = coords[-1][0]
+    print(end_of_wall)
 
     # display and save initial map
     if mapping:
-        pscan.map(nmbr=nmbr, display_all_points=True)
+        pscan.map(seq_nmbr=nmbr, display_all_points=True, show=True)
 
     # OK to proceed?
     if end_of_wall > EOW:
@@ -242,7 +240,8 @@ def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=False):
 
         # scan and find 2 most salient regions
         nmbr += 1
-        pscan = save_scan(nmbr=nmbr, lev=17500, hev=22500)
+        data = save_scan(nmbr=nmbr)
+        pscan = proscan.ProcessScan(data, lev=17500, hev=22500)
         longest_regions = pscan.regions_by_length()[:2]
 
         # choose left-most region
@@ -274,7 +273,7 @@ def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=False):
 
     # display and save final map
     if mapping:
-        pscan.map(nmbr=nmbr, display_all_points=False)
+        pscan.map(seq_nmbr=nmbr, display_all_points=False)
     return dist  # needed by caller for radius of next turn
 
 def round_corner(speed, turn_radius):
@@ -311,7 +310,7 @@ def find_std_dev(datalist):
 
 def save_scan(nmbr=None, lev=oc.LEV, hev=oc.HEV):
     """
-    Scan and save data in numbered files. Return ProcessScan object.
+    Scan and save data in numbered file. Return data.
     """
     if nmbr is None:
         nmbr = ''
@@ -320,15 +319,15 @@ def save_scan(nmbr=None, lev=oc.LEV, hev=oc.HEV):
         pickle.dump(data, f)
     logger.debug(f"Number of scan points: {len(data)}")
     #save_scandata_as_csv(data, f'Data/scan_data{nmbr}.csv')
-    pscan = proscan.ProcessScan(data)
-    return pscan
+    return data
 
 def scan_and_plan(nmbr=None):
     """Scan, save data and analyze. Return course & distance to open sector.
     """
     if nmbr is None:
         nmbr = ''
-    pscan = save_scan(nmbr)
+    data = save_scan(nmbr)
+    pscan = proscan.ProcessScan(data)
     logger.debug(f"Regions = {pscan.regions}")
     logger.debug(f"Zero Regions = {pscan.zero_regions}")
 
@@ -343,7 +342,7 @@ def scan_and_plan(nmbr=None):
     try:
         left_region, right_region = long2regs
     except ValueError:
-        pscan.map(nmbr=nmbr, display_all_points=True)
+        pscan.map(seq_nmbr=nmbr, display_all_points=True)
         return 0, 0
 
     # find 'far' end of L & R regions as it will be the constriction
@@ -367,7 +366,7 @@ def scan_and_plan(nmbr=None):
     # print results and display map
     logger.debug(f"Relative course: {course}")
     logger.debug(f"Travel Distance: {r}")
-    pscan.map(nmbr=nmbr, display_all_points=True)
+    pscan.map(seq_nmbr=nmbr, display_all_points=True)
     return course, r
 
 if __name__ == "__main__":
@@ -395,11 +394,18 @@ if __name__ == "__main__":
         else:
             break
     '''
-    nmbr = 0
-    square_to_wall()
-    approach_wall(CARSPEED, CLEARANCE)
-    dist = drive_along_wall_to_right(CARSPEED, CLEARANCE)  #, mapping=True)
-    radius_turn_on_the_go(RGT, 90, dist)
+    
+    n = 0  # times through loop
+    while n < 5:
+        nmbr = n * 10  # sequence number on saved data
+        n += 1
+        square_to_wall(nmbr=nmbr)
+        nmbr += 1
+        approach_wall(CARSPEED, CLEARANCE, nmbr=nmbr)
+        nmbr += 1
+        dist = drive_along_wall_to_right(CARSPEED, CLEARANCE, nmbr=nmbr)
+        radius_turn_on_the_go(RGT, 90, dist)
+    
     dist = car.get_sensor_data()
     print(dist)
     car.close()

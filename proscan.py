@@ -346,12 +346,19 @@ class ProcessScan():
         dist = geo.p2line_dist((0, 0), line)  # perp distance to line
         return (coords, length, angle, dist)
 
-    def map(self, map_folder="Maps", nmbr=None, show=True,
-            display_all_points=False):
+    def map(self, map_folder="Maps", seq_nmbr=None, show=False,
+            display_all_points=True):
+        """Plot all points and line segments and save in map_folder.
+
+        Optional args:
+        display_all_points=False to plot only points in regions
+        seq_nmbr to append to save_file_name
+        show=True to display an interactive plot (which blocks program).
+        """
 
         filename = f"{map_folder}/scanMap"
-        if nmbr:
-            imagefile = filename + str(nmbr) + ".png"
+        if seq_nmbr:
+            imagefile = filename + str(seq_nmbr) + ".png"
         else:
             imagefile = filename + ".png"
 
@@ -381,7 +388,6 @@ class ProcessScan():
             y_vals = [pnt1[1], pnt2[1]]
             line_coords.append((pnt1, pnt2))
             plt.plot(x_vals, y_vals)
-        #logger.debug(line_coords)
 
         plt.axis('equal')
         plt.savefig(imagefile)
