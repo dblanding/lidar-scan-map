@@ -65,7 +65,7 @@ def normalize_angle(angle):
 def relative_bearing(target):
     """Return 'relative' bearing of an 'absolute' target."""
     delta = target - 180
-    logger.debug(f"heading: {car.heading()}")
+    #logger.debug(f"heading: {car.heading()}")
     rel_brng = int(car.heading() - delta)
     return normalize_angle(rel_brng)
 
@@ -92,39 +92,39 @@ def turn_to(target):
             logger.debug(f"heading error: {heading_error} deg")
             time.sleep(0.2)
 
-def _turn_on_the_go(target, direction, spin_ratio):
+def _turn_on_the_go(speed, target, direction, spin_ratio):
     """
     Turn toward target course (degrees) while going in direction.
     (For example, direction = FWD for straight ahead.)
     """
     target = normalize_angle(target)
-    trim = CARSPEED * spin_ratio
+    trim = speed * spin_ratio
     # To avoid the complication of the 360 / 0 transition,
     # convert problem to one of aiming for a target at 180 degrees.
     heading_error = relative_bearing(target) - 180
     if heading_error > 0:
-        car.go(CARSPEED, direction, spin=trim)
+        car.go(speed, direction, spin=trim)
         while heading_error > 0:
-            logger.debug(f"relative heading: {int(heading_error)}")
+            #logger.debug(f"relative heading: {int(heading_error)}")
             heading_error = relative_bearing(target) - 180
             time.sleep(0.1)
     elif heading_error < 0:
-        car.go(CARSPEED, direction, spin=trim)
+        car.go(speed, direction, spin=trim)
         while heading_error < 0:
-            logger.debug(f"heading error: {int(heading_error)}")
+            #logger.debug(f"heading error: {int(heading_error)}")
             heading_error = relative_bearing(target) - 180
             time.sleep(0.1)
     car.stop_wheels()
 
-def radius_turn_on_the_go(direction, angle, turn_radius):
+def radius_turn_on_the_go(speed, direction, angle, turn_radius):
     """Turn car angle degrees (CCW positive) at turn_radius (cm)
     while underway in direction (eg: LFT, FWD or RGT)."""
     spin_ratio = (W2W_DIST / 2 / turn_radius) / math.sqrt(2)
-    trim = CARSPEED * spin_ratio
+    trim = speed * spin_ratio
     target = car.heading() - angle
     if target < 0:
         target += 360
-    _turn_on_the_go(target, direction, spin_ratio)
+    _turn_on_the_go(speed,target, direction, spin_ratio)
 
 def print_line_params(line_params):
     for item in line_params:
@@ -146,9 +146,9 @@ def square_to_wall(nmbr=0, mapping=True):
 
     # scan and get parameters of most salient line
     data = save_scan(nmbr=nmbr)
-    pscan = proscan.ProcessScan(data, lev=17500, hev=22500)
-    longest_region_idx = pscan.regions_by_length()[0]
-    longest_segment = pscan.segments_in_region(longest_region_idx)[0]
+    pscan = proscan.ProcessScan(data, gap=5, fit=2)
+    closest_region_idx = pscan.closest_region()
+    longest_segment = pscan.segments_in_region(closest_region_idx)[0]
     line_params = pscan.get_line_parameters(longest_segment)
     coords, length, angle, dist = line_params
 
@@ -174,9 +174,9 @@ def approach_wall(carspeed, clearance, nmbr=1, mapping=True):
 
     # scan and get parameters of most salient line
     data = save_scan(nmbr=nmbr)
-    pscan = proscan.ProcessScan(data, lev=17500, hev=22500)
-    longest_region_idx = pscan.regions_by_length()[0]
-    longest_segment = pscan.segments_in_region(longest_region_idx)[0]
+    pscan = proscan.ProcessScan(data, gap=5, fit=2)
+    closest_region_idx = pscan.closest_region()
+    longest_segment = pscan.segments_in_region(closest_region_idx)[0]
     line_params = pscan.get_line_parameters(longest_segment)
     coords, length, angle, dist = line_params
 
@@ -217,19 +217,19 @@ def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=True):
 
     # scan and get parameters of most salient line
     data = save_scan(nmbr=nmbr)
-    pscan = proscan.ProcessScan(data, lev=17500, hev=22500)
-    longest_region_idx = pscan.regions_by_length()[0]
-    longest_segment = pscan.segments_in_region(longest_region_idx)[0]
+    pscan = proscan.ProcessScan(data, gap=5, fit=2)
+    closest_region_idx = pscan.closest_region()
+    longest_segment = pscan.segments_in_region(closest_region_idx)[0]
     line_params = pscan.get_line_parameters(longest_segment)
     coords, length, angle, dist = line_params
 
     # X coordinate of right end of wall
     end_of_wall = coords[-1][0]
-    print(end_of_wall)
+    print(f"end_of_wall = {end_of_wall}")
 
     # display and save initial map
     if mapping:
-        pscan.map(seq_nmbr=nmbr, display_all_points=True, show=True)
+        pscan.map(seq_nmbr=nmbr, display_all_points=True, show=False)
 
     # OK to proceed?
     if end_of_wall > EOW:
@@ -238,20 +238,17 @@ def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=True):
     # continue to end of wall
     while end_of_wall > EOW:
 
-        # scan and find 2 most salient regions
+        # scan and get parameters of most salient line
         nmbr += 1
         data = save_scan(nmbr=nmbr)
-        pscan = proscan.ProcessScan(data, lev=17500, hev=22500)
-        longest_regions = pscan.regions_by_length()[:2]
-
-        # choose left-most region
-        longest_regions.sort()  # sorts by value of index
-        region_idx = longest_regions[0]
-
-        # get parameters of most salient line in region
-        segment = pscan.segments_in_region(region_idx)[0]
-        line_params = pscan.get_line_parameters(segment)
+        pscan = proscan.ProcessScan(data, gap=5, fit=2)
+        closest_region_idx = pscan.closest_region()
+        longest_segment = pscan.segments_in_region(closest_region_idx)[0]
+        line_params = pscan.get_line_parameters(longest_segment)
         coords, length, angle, dist = line_params
+
+        # X coordinate of right end of wall
+        end_of_wall = coords[-1][0]
 
         # use dist to wall feedback for cross-track error correction
         x_track_error = dist - clearance
@@ -261,9 +258,6 @@ def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=True):
         # use wall angle feedback to trim heading
         Ka = 1  # Coefficient for heading error correction
         trim = Ka * angle
-
-        # X coordinate of right end of wall
-        end_of_wall = coords[-1][0]
 
         car.go(carspeed, direction, spin=trim)
         msg = f"Dist: {int(dist)}\tAngle: {angle:.2f}\tEOW: {end_of_wall:.2f}\tTrim: {trim}"
@@ -317,7 +311,7 @@ def save_scan(nmbr=None, lev=oc.LEV, hev=oc.HEV):
     data = car.scan(lev=lev, hev=hev)
     with open(f'Data/scan_data{nmbr}.pkl', 'wb') as f:
         pickle.dump(data, f)
-    logger.debug(f"Number of scan points: {len(data)}")
+    logger.debug(f"Saving scan number {nmbr} with {len(data)} points.")
     #save_scandata_as_csv(data, f'Data/scan_data{nmbr}.csv')
     return data
 
@@ -394,18 +388,28 @@ if __name__ == "__main__":
         else:
             break
     '''
-    
     n = 0  # times through loop
     while n < 5:
         nmbr = n * 10  # sequence number on saved data
         n += 1
+        print()
+        print(f"Squaring to wall sequence number {nmbr}")
+        print()
         square_to_wall(nmbr=nmbr)
         nmbr += 1
+        print()
+        print(f"Approaching wall sequence number {nmbr}")
+        print()
         approach_wall(CARSPEED, CLEARANCE, nmbr=nmbr)
         nmbr += 1
+        print()
+        print(f"Driving along wall sequence number {nmbr}")
+        print()
         dist = drive_along_wall_to_right(CARSPEED, CLEARANCE, nmbr=nmbr)
-        radius_turn_on_the_go(RGT, 90, dist)
-    
-    dist = car.get_sensor_data()
-    print(dist)
+        print()
+        print(f"Turning corner")
+        print()
+        radius_turn_on_the_go(0.8 * CARSPEED, RGT, 90, dist)
+    sonar = car.get_sensor_data()
+    print(f"Sonar data: {sonar}")
     car.close()

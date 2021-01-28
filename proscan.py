@@ -153,24 +153,14 @@ class ProcessScan():
             istop += 1
         return istop
 
-    def _find_local_min(self, indx0, indx1):
+    def _find_local_min(self, region):
         """
-        For points between indx0 & indx1, if there is a series of adjacent
-        points sharing a local min dist value, return a tuple of the
-        indexes of the first and last indexes of those adjacent points.
-        If not, return an empty tuple.
-
-        If a series of adjacent points happens to be at a local minimum
-        distance to the lidar module, it can be a good place to look for
-        and find a straight line. There are several reasons:
-        1. The points are spaced most closely together.
-        2. This section of wall is closest to the lidar module.
-        3. This area is being scanned from a direction which is nearly
-        parallel to the surface normal so the distance values will tend
-        to be more reliable than for areas being scanned more obliquely.
+        For points between indx0 & indx1, return a tuple (dist, index)
+        of the last point foune having the minimum dist value.
         """
+        indx0, indx1 = region
         mindist = ()
-        for pnt in self.points:
+        for pnt in self.points[indx0 : indx1]:
             dist = pnt.dist
             if not mindist or dist < mindist:
                 mindist = dist
@@ -302,6 +292,35 @@ class ProcessScan():
         for region in self.regions:
             indexes.extend(range(region[0], region[-1]+1))
         return indexes
+
+    def closest_point(self, region):
+        """
+        Search for non-zero points in region where
+        region is a 2 element tuple (low_index, hi_index)
+        Return (dist, index) tuple of closest point.
+        dist is the lowest distance value found and
+        index is the highest index having this value.
+        """
+        low_idx, hi_idx = region
+        lowest_dist_val = 1200
+        idx_of_lowest_val = None
+        for idx in range(low_idx, hi_idx+1):
+            dist = self.points[idx].dist
+            if 0 < dist < lowest_dist_val:
+                lowest_dist_val = dist
+                idx_of_lowest_val = idx
+        return (lowest_dist_val, idx_of_lowest_val)
+
+    def closest_region(self):
+        """Return index of closest non-zero region."""
+        minlist = []
+        for idx, region in enumerate(self.regions):
+            if idx not in self.zero_regions:
+                closest, _ = self.closest_point(region)
+                minlist.append((closest, idx))
+        minlist.sort()
+        index_of_closest_region = minlist[0][-1]
+        return index_of_closest_region
 
     def regions_by_length(self):
         """
