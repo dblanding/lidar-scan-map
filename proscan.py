@@ -377,7 +377,11 @@ class ProcessScan():
 
         filename = f"{map_folder}/scanMap"
         if seq_nmbr:
-            imagefile = filename + str(seq_nmbr) + ".png"
+            str_seq_nmbr = str(seq_nmbr)
+            # prepend a '0' to single digit values (helps viewer sort)
+            if len(str_seq_nmbr) == 1:
+                str_seq_nmbr = '0' + str_seq_nmbr
+            imagefile = filename + str_seq_nmbr + ".png"
         else:
             imagefile = filename + ".png"
 
