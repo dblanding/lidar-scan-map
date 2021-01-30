@@ -76,21 +76,29 @@ def turn_to(target):
     # convert problem to one of aiming for a target at 180 degrees.
     heading_error = relative_bearing(target) - 180
     logger.debug(f"relative heading: {heading_error} deg")
-    while not -2 <= heading_error <= 2:
+    done = False
+    while not done:
         while heading_error > 2:
-            car.spin(50)
-            time.sleep(0.1)
-            car.stop_wheels()
+            spd = heading_error + 40
+            car.spin(spd)
+            #time.sleep(0.1)
+            #car.stop_wheels()
             heading_error = relative_bearing(target) - 180
             logger.debug(f"relative heading: {heading_error} deg")
-            time.sleep(0.2)
-        while heading_error < -2:
-            car.spin(-50)
             time.sleep(0.1)
-            car.stop_wheels()
+        car.stop_wheels()
+        while heading_error < -2:
+            spd = heading_error - 40
+            car.spin(spd)
+            #time.sleep(0.1)
+            #car.stop_wheels()
             heading_error = relative_bearing(target) - 180
             logger.debug(f"heading error: {heading_error} deg")
-            time.sleep(0.2)
+            time.sleep(0.1)
+        car.stop_wheels()
+        if -3 < abs(heading_error) < 3:
+            print("done")
+            done = True
 
 def _turn_on_the_go(speed, target, direction, spin_ratio):
     """
@@ -370,8 +378,8 @@ if __name__ == "__main__":
         else:
             break
     '''
-    n = 0  # times through loop
-    while n < 2:
+    n = 0
+    while n < 2:  # times through loop
         nmbr = n * 10  # sequence number on saved data
         n += 1
         print()
@@ -389,9 +397,11 @@ if __name__ == "__main__":
         print()
         dist = drive_along_wall_to_right(CARSPEED, CLEARANCE, nmbr=nmbr)
         print()
+        print(f"Car heading before turn = {car.heading()}")
         print(f"Turning corner")
-        print()
-        radius_turn_on_the_go(0.8 * CARSPEED, RGT, 90, dist)
+        radius_turn_on_the_go(0.8 * CARSPEED, RGT, 80, dist)
+        print(f"Car heading after turn = {car.heading()}")
+        
     sonar = car.get_sensor_data()
     print(f"Sonar data: {sonar}")
     car.close()
