@@ -52,3 +52,43 @@ m2 = -u + spin
 m3 = -v + spin
 m4 = v + spin
 ```
+
+### Maintaining Cross-Track position within travel lane
+
+Let's say we want our omni-wheel car to travel in the positve Y direction (FWD) and we want it to stay centered in its travel lane. Just like any car, it is neccesary to make subtle steering corrections in response to unintended cross-track deviations from its intended path. In the figure below, our car has been shown in a 'travel lane' traveling from left to right. 
+
+![car in lane](images/car_in_lane.png)
+
+This is where polar coordinates again come to the rescue. It's easy to make a subtle steering correction if we're already working in polar coordinates. Simply modulate the angle coordinate until the car's cross-track position error has been nulled. Done!
+Below is shown the signature of the method to drive the car using polar coordinates. 
+ 
+
+``` python
+    def go(self, speed, angle, spin=0):
+        """
+		Drive at speed (int) in relative direction angle (degrees)
+        while simultaneoulsy spinning CCW at rate = spin (int).
+        """
+```
+
+### Making radius turns
+
+What if the lane is curved? How do we make the car follow a curved path of radius = R as shown in the diagram below? That's what the spin parameter is for.
+
+![curved path](images/radius_turn1.png)
+
+This diagram shows our car moving in the FWD direction while simultaneously spinning CCW, resulting in a path which follows the arc of a circle of radius R. We need to come up with the correct value of spin which will produce 90 degrees of rotation as the car translates a distance of 1/4 the circumference of the circle.
+
+> car translation distance = pi * R/2
+
+Because of the car's geometry, notice that the drive direction of the wheels is 45 degrees from the direction of travel of the car. As a result, the motion of the wheels at their interface with the floor must **exceed** the distance the car translates by a factor of sqrt(2).
+
+> translation distance (at wheels) = (pi * R/2) * sqrt(2)
+
+Knowing the dimension r from the car's geometric center to each wheel, we can find the corresponding value of spin that will produce 90 degrees of CCW rotation of the car about its own axis is:
+
+> spin distance (at wheels) = pi * r/2
+
+In summary, the car will follow the curved path of radius R if the value of spin is proportional to the car speed in the following ratio:
+
+> spin_ratio =  (sqrt(2)/2) * r/R
