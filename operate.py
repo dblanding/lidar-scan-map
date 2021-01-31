@@ -30,7 +30,7 @@ KD = 0.3  # steering PID derivative coefficient
 CARSPEED = 150  # default car speed
 RATE = 13.5  # cm/sec traveled by car @ CARSPEED = 150
 R = 50  # Distance margin for clearing obstructions
-EOW = 10  # Threshold End of Wall
+EOW = 25  # Threshold End of Wall
 CLEARANCE = 40  # nominal wall clearance (cm)
 
 class PID():
@@ -52,6 +52,46 @@ class PID():
         self.trimval += adjustment
         #logger.debug(f"P-term: {p_term:.2f}\tD-term: {d_term:.2f}\tTrim: {self.trimval}\tHDG: {int(hdg)}")
         return self.trimval
+
+class ETA():
+    """
+    Predict ETA based on periodically updated values.
+    """
+
+    def __init__(self, initial_val, target):
+        self.target = target
+        self.initial_val = initial_val
+        self.prev_val = initial_val
+        self.prev_time = time.time()
+        self.delta_time = None
+
+    def update(self, val):
+        """
+        Based on value, predict time to arrive at target.
+
+        Return 2-element tuple: (eta > delta_time (boolean), eta (float))
+        """
+        now = time.time()
+        self.delta_time = now - self.prev_time
+
+        if self.initial_val > self.target:  # values decreasing
+            # calculate delta_value (change in value per update)
+            delta_val = (self.prev_val - val)
+
+        elif self.initial_val < self.target:  # values increasing
+            # calculate delta_value (change in value per update)
+            delta_val = (val - self.prev_val)
+
+        # estimate time to arrival at target
+        slope = self.delta_time / delta_val
+        eta = (val - self.target) * slope
+        self.prev_val = val
+        self.prev_time = now
+
+        # estimate nmbr of remaining updates
+        nmbr_updates_remaining = int(eta / self.delta_time)
+
+        return (nmbr_updates_remaining, eta)
 
 
 def normalize_angle(angle):
@@ -159,7 +199,7 @@ def get_closest_line_params(nmbr, mapping=False):
     return line parameters as tuple (ccords, length, angle, dist)
     """
     data = save_scan(nmbr=nmbr)
-    pscan = proscan.ProcessScan(data, gap=5, fit=2)
+    pscan = proscan.ProcessScan(data, gap=10, fit=4)
     closest_region_idx = pscan.closest_region()
     longest_segment = pscan.segments_in_region(closest_region_idx)[0]
     line_params = pscan.get_line_parameters(longest_segment)
@@ -190,12 +230,12 @@ def approach_wall(carspeed, clearance, nmbr=1, mapping=True):
 
     coords, length, angle, dist = get_closest_line_params(nmbr)
 
-    # Calculate distance & time to reach target location
-    dist_to_travel = dist - clearance
-    time_to_travel = dist_to_travel / RATE
 
     # OK to proceed?
     if dist > clearance:
+        # Calculate distance & time to reach target location
+        dist_to_travel = dist - clearance
+        time_to_travel = dist_to_travel / RATE
 
         # instantiate PID steering
         target = int(car.heading())
@@ -211,6 +251,22 @@ def approach_wall(carspeed, clearance, nmbr=1, mapping=True):
         while delta_t < time_to_travel:
             delta_t = time.time() - start
             sonardist, *rest = car.go(carspeed, FWD, spin=pid.trim())
+            # Equivalent lidar distance = sonardist + SONAR_LIDAR_OFFSET
+            logger.debug(f"{sonardist+SONAR_LIDAR_OFFSET}\t{delta_t}")
+        car.stop_wheels()
+
+    elif dist < clearance:
+        # Calculate distance & time to reach target location
+        dist_to_travel = clearance - dist
+        time_to_travel = dist_to_travel / RATE
+
+        # back away from wall
+        start = time.time()
+        delta_t = 0
+        logger.debug("Dist:\tTime:")
+        while delta_t < time_to_travel:
+            delta_t = time.time() - start
+            sonardist, *rest = car.go(carspeed, REV, spin=0)
             # Equivalent lidar distance = sonardist + SONAR_LIDAR_OFFSET
             logger.debug(f"{sonardist+SONAR_LIDAR_OFFSET}\t{delta_t}")
         car.stop_wheels()
@@ -231,6 +287,7 @@ def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=True):
 
     # OK to proceed?
     if end_of_wall > EOW:
+        eta = ETA(end_of_wall, 10)
         car.go(carspeed, RGT)
 
     # continue to end of wall
@@ -242,7 +299,7 @@ def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=True):
         
         # X coordinate of right end of wall
         end_of_wall = coords[-1][0]
-
+        
         # use dist to wall feedback for cross-track error correction
         x_track_error = dist - clearance
         Kx = 1  # Coefficient for cross track correction of travel direction
@@ -255,8 +312,21 @@ def drive_along_wall_to_right(carspeed, clearance, nmbr=2, mapping=True):
         car.go(carspeed, direction, spin=trim)
         msg = f"Dist: {int(dist)}\tAngle: {angle:.2f}\tEOW: {end_of_wall:.2f}\tTrim: {trim}"
         logger.debug(msg)
+        eta_data = eta.update(end_of_wall)
+        print(eta_data)
+        ok_to_continue, time_to_continue = eta_data
+        if not ok_to_continue:
+            if time_to_continue > 0:
+                time.sleep(time_to_continue)
+            print("At end of wall. Breaking out of loop")
+            break
 
     car.stop_wheels()
+    # final scan
+    nmbr += 1
+    clad = get_closest_line_params(nmbr)
+    print(f"Final Scan: {nmbr}")
+    pprint(clad)
 
     return dist  # needed by caller for radius of next turn
 
@@ -380,7 +450,7 @@ if __name__ == "__main__":
     '''
     n = 0
     while n < 2:  # times through loop
-        nmbr = n * 10  # sequence number on saved data
+        nmbr = n * 100  # sequence number on saved data
         n += 1
         print()
         print(f"Squaring to wall sequence number {nmbr}")

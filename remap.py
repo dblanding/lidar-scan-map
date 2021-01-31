@@ -18,7 +18,8 @@ def remap(nmbr, verbose=True, display=True):
         data = pickle.load(file)
     if verbose:
         pprint.pprint(data)
-    pscan = proscan.ProcessScan(data, gap=5, fit=2)
+    pscan = proscan.ProcessScan(data, gap=10, fit=4)
+    print(f"Regions: {pscan.regions}")
     pscan.map(seq_nmbr=nmbr, display_all_points=True, show=display)
 
 def plot_all():
@@ -44,9 +45,10 @@ def function_name(arguments):
     return None
 
 if __name__ == '__main__':
-    # plot all datafiles
-    plot_all()  # can take about 30 seconds to run
-
-    # for individual interactive plots:
-    #nmbr = input("Enter number of data to load: ")
-    #remap(nmbr)
+    nmbr = input("Enter 'all' or integer number of data to load: ")
+    if nmbr == 'all':
+        # plot all datafiles
+        plot_all()  # can take about 30 seconds to run
+    elif nmbr.isnumeric():
+        # generate individual interactive plot
+        remap(nmbr)
