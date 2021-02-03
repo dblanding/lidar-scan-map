@@ -79,9 +79,9 @@ What if the lane is curved? How do we make the car follow a curved path of radiu
 
 This diagram shows our car moving in the FWD direction while simultaneously spinning CCW, resulting in a path which is the arc of a circle of radius R. We need to come up with the correct value of spin which will produce 90 degrees of rotation as the car translates along 1/4 of the circumference of the circle.
 
-Notice that the drive direction of the wheels is 45 degrees from the direction of travel of the car. As a result, the motion of the wheels at their interface with the floor must **exceed** the distance the car translates by a factor of \sqrt{2}.
+Notice that the drive direction of the wheels is 45 degrees from the direction of travel of the car. As a result, the motion of the wheels at their interface with the floor must **exceed** the distance the car translates by a factor of √2.
 
-> translation distance (at wheels) = (pi * R/2) * \sqrt{2}
+> translation distance (at wheels) = (pi * R/2) * √2
 
 Knowing the dimension r from the car's geometric center to each wheel, we can find the corresponding value of spin that will produce 90 degrees of CCW rotation of the car about its own axis is:
 
@@ -89,4 +89,4 @@ Knowing the dimension r from the car's geometric center to each wheel, we can fi
 
 In summary, the car will follow the curved path of radius R if the value of spin is proportional to the car speed in the following ratio:
 
-> spin_ratio =  (r / R) * (\sqrt{2}/2)
+> spin_ratio =  r/R * √2/2

@@ -55,7 +55,7 @@ class PID():
 
 class ETA():
     """
-    Predict ETA based on periodically updated values.
+    Estimate Time of Arrival based on periodically updated values.
     """
 
     def __init__(self, initial_val, target):
@@ -89,9 +89,9 @@ class ETA():
         self.prev_time = now
 
         # estimate nmbr of remaining updates
-        nmbr_updates_remaining = int(eta / self.delta_time)
+        nmbr_of_updates_remaining = int(eta / self.delta_time)
 
-        return (nmbr_updates_remaining, eta)
+        return (nmbr_of_updates_remaining, eta)
 
 
 def normalize_angle(angle):
@@ -189,7 +189,7 @@ def print_line_params(line_params):
         print(f"distance: {distance:.2f} cm")
         print()
 
-def get_closest_line_params(nmbr, mapping=False):
+def get_closest_line_params(nmbr, lev=5000, mapping=False):
     """
     Scan and return parameters of most salient line in closest region.
 
@@ -198,8 +198,8 @@ def get_closest_line_params(nmbr, mapping=False):
 
     return line parameters as tuple (ccords, length, angle, dist)
     """
-    data = save_scan(nmbr=nmbr)
-    pscan = proscan.ProcessScan(data, gap=10, fit=4)
+    data = save_scan(nmbr=nmbr, lev=lev)
+    pscan = proscan.ProcessScan(data, lev=lev, gap=10, fit=4)
     closest_region_idx = pscan.closest_region()
     longest_segment = pscan.segments_in_region(closest_region_idx)[0]
     line_params = pscan.get_line_parameters(longest_segment)
