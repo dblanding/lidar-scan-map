@@ -235,10 +235,10 @@ class ProcessScan():
             elif pnt.get("encdr") > self.HEV:
                 break
             if dist > self.GAP * pnt.get("dist") / 100:
-                if n > (start_index + 1):
+                if n > (start_index + 3):  # exclude 'tiny' regions
                     regions.append((start_index, n-1))
                 start_index = n
-        if n != start_index:
+        if n > start_index + 3:
             regions.append((start_index, n))  # add last region
         self.regions = regions
         logger.debug(f"Regions: {self.regions}")

@@ -6,7 +6,7 @@ import pickle
 import pprint
 import proscan
 
-def remap(nmbr, verbose=True, display=True):
+def remap(nmbr, verbose=False, display=True):
     """
     Load saved datafile by file 'nmbr'
 
@@ -18,8 +18,9 @@ def remap(nmbr, verbose=True, display=True):
         data = pickle.load(file)
     if verbose:
         pprint.pprint(data)
-    pscan = proscan.ProcessScan(data, gap=10, fit=4)
-    print(f"Regions: {pscan.regions}")
+    pscan = proscan.ProcessScan(data, lev=5000, gap=10, fit=4)
+    if verbose:
+        print(f"Regions: {pscan.regions}")
     pscan.map(seq_nmbr=nmbr, display_all_points=True, show=display)
 
 def plot_all():
