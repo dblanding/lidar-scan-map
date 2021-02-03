@@ -404,8 +404,8 @@ def scan_and_plan(nmbr=None):
     right_pnt_indx = pscan.regions[right_region][0]
 
     # find coords of each point
-    left_pnt = pscan.points[left_pnt_indx].xy
-    right_pnt = pscan.points[right_pnt_indx].xy
+    left_pnt = pscan.points[left_pnt_indx].get("xy")
+    right_pnt = pscan.points[right_pnt_indx].get("xy")
     logger.debug(f"Left point: {left_pnt}")
     logger.debug(f"Right point: {right_pnt}")
 

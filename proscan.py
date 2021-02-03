@@ -28,17 +28,6 @@ def encoder_count_to_radians(enc_val):
     return theta
 
 
-class Point():
-    """Convenience structure encapsulating data point measured values
-    (int type) and calculated values (float type)"""
-
-    def __init__(self, enc_val, dist, theta=0, xy=(0, 0)):
-        self.dist = dist  # integer measured distance (cm)
-        self.enc_val = enc_val  # angle encoder value (int)
-        self.theta = theta  # (derived) float angle wrt car (radians)
-        self.xy = xy  # (x, y) coordinates
-
-
 class ProcessScan():
     """
     Generate points and find set of best fit lines from scan data.
@@ -46,7 +35,7 @@ class ProcessScan():
     """
 
     def __init__(self, data, lev=None, hev=None, gap=None, fit=None):
-        """Generate list of Point objects from (scan) data.
+        """Generate list of point dicts from (scan) data.
         Optionally specify: sector of interest
         from lev (low encoder value) to hev (high encoder value),
         gap (threshold distance between adjacent points for continuity),
@@ -142,8 +131,8 @@ class ProcessScan():
                 istop -= 1
                 if istop < end_idx:
                     break
-            line = geo.cnvrt_2pts_to_coef(self.points[istrt].xy,
-                                          self.points[istop].xy)
+            line = geo.cnvrt_2pts_to_coef(self.points[istrt].get("xy"),
+                                          self.points[istop].get("xy"))
             avg_dist, cum_dsqr = self._find_sum_of_sq_dist_to_line(line,
                                                                    istrt,
                                                                    istop)
@@ -161,11 +150,11 @@ class ProcessScan():
         indx0, indx1 = region
         mindist = ()
         for pnt in self.points[indx0 : indx1]:
-            dist = pnt.dist
+            dist = pnt.get("dist")
             if not mindist or dist < mindist:
                 mindist = dist
         min_indx_list = [indx for indx, pnt in enumerate(self.points)
-                         if pnt.dist <= mindist+1]
+                         if pnt.get("dist") <= mindist+1]
         return min_indx_list
 
     def _find_p2p_angles_of_pnts(self, indx0, indx1):
@@ -173,7 +162,7 @@ class ProcessScan():
         indexlist = [indx for indx in range(indx0, indx1)]
         slopelist = []
         for indx in indexlist:
-            slope = geo.p2p_angle(points[indx].xy, points[indx + 1].xy)
+            slope = geo.p2p_angle(points[indx].get("xy"), points[indx + 1].get("xy"))
             slopelist.append(slope)
         return zip(indexlist, slopelist)
 
@@ -188,7 +177,7 @@ class ProcessScan():
         if indx1 < indx0:
             indx1, indx0 = indx0, indx1
         for idx in range(indx0, indx1):
-            pnt = self.points[idx].xy
+            pnt = self.points[idx].get("xy")
             dist = geo.p2line_dist(pnt, line)
             dsqr = dist * dist
             cum_dist += dist
@@ -199,7 +188,7 @@ class ProcessScan():
 
     def _generate_points(self, data):
         """
-        populate self.points list with Point objects
+        populate self.points list with point dicts
 
         data: (encoder_count, distance, byte_count, delta_time)
 
@@ -211,23 +200,23 @@ class ProcessScan():
         """
         points = []
         for record in data:
-            encoder_count, dist = record[:2]
-            pnt = Point(encoder_count, dist)
-            points.append(pnt)
-        self.points = points
+            encoder_count, dist, *rest = record
+            point = {"encdr": encoder_count, "dist": dist}
+            points.append(point)
 
-        # calculate 'theta' value of each (non-zero) point
-        for pnt in self.points:
-            if pnt.dist:
-                theta = encoder_count_to_radians(pnt.enc_val)
-                pnt.theta = theta
+        # calculate 'theta' value of each point
+        for pnt in points:
+            theta = encoder_count_to_radians(pnt.get("encdr"))
+            pnt["theta"] = theta
 
         # calculate (x, y) coords from polar coords (dist, theta)
-        for pnt in self.points:
-            if pnt.theta:
-                x = pnt.dist * math.cos(pnt.theta)
-                y = pnt.dist * math.sin(pnt.theta)
-                pnt.xy = (x, y)
+        for pnt in points:
+            theta = pnt.get("theta")
+            dist = pnt.get("dist")
+            x = pnt.get("dist") * math.cos(pnt.get("theta"))
+            y = pnt.get("dist") * math.sin(pnt.get("theta"))
+            pnt["xy"] = (x, y)
+        self.points = points
 
     def _generate_regions(self):
         """Find continuous regions of closely spaced points (clumps)
@@ -239,13 +228,13 @@ class ProcessScan():
         start_index = 0
         dist = 0
         for n, pnt in enumerate(self.points):
-            if pnt.enc_val < self.LEV:
+            if pnt.get("encdr") < self.LEV:
                 start_index = n
-            elif self.LEV <= pnt.enc_val <= self.HEV:
-                dist = abs(pnt.dist - self.points[n-1].dist)
-            elif pnt.enc_val > self.HEV:
+            elif self.LEV <= pnt.get("encdr") <= self.HEV:
+                dist = abs(pnt.get("dist") - self.points[n-1].get("dist"))
+            elif pnt.get("encdr") > self.HEV:
                 break
-            if dist > self.GAP * pnt.dist / 100:
+            if dist > self.GAP * pnt.get("dist") / 100:
                 if n > (start_index + 1):
                     regions.append((start_index, n-1))
                 start_index = n
@@ -281,7 +270,7 @@ class ProcessScan():
         """
         zero_regions = []
         for n, region in enumerate(self.regions):
-            if self.points[region[0]].dist == -oc.VLEG:
+            if self.points[region[0]].get("dist") == -oc.VLEG:
                 zero_regions.append(n)
         self.zero_regions = zero_regions
 
@@ -305,7 +294,7 @@ class ProcessScan():
         lowest_dist_val = 1200
         idx_of_lowest_val = None
         for idx in range(low_idx, hi_idx+1):
-            dist = self.points[idx].dist
+            dist = self.points[idx].get("dist")
             if 0 < dist < lowest_dist_val:
                 lowest_dist_val = dist
                 idx_of_lowest_val = idx
@@ -356,8 +345,8 @@ class ProcessScan():
         """
         start_idx = segment[0]
         end_idx = segment[1]
-        start_coords = self.points[start_idx].xy
-        end_coords = self.points[end_idx].xy
+        start_coords = self.points[start_idx].get("xy")
+        end_coords = self.points[end_idx].get("xy")
         line = geo.cnvrt_2pts_to_coef(start_coords, end_coords)
         coords = (start_coords, end_coords)
         length = geo.p2p_dist(start_coords, end_coords)
@@ -394,7 +383,7 @@ class ProcessScan():
             pnts_to_plot = [pnt for idx, pnt in enumerate(self.points)
                             if idx in self._indexes_in_regions()]
         for pnt in pnts_to_plot:
-            x, y = pnt.xy
+            x, y = pnt.get("xy")
             xs.append(x)
             ys.append(y)
         plt.scatter(xs, ys, color='#003F72')
@@ -405,8 +394,8 @@ class ProcessScan():
         line_coords = []  # x, y coordinates
         for segment in self.segments:
             idx1, idx2 = segment
-            pnt1 = self.points[idx1].xy
-            pnt2 = self.points[idx2].xy
+            pnt1 = self.points[idx1].get("xy")
+            pnt2 = self.points[idx2].get("xy")
             x_vals = [pnt1[0], pnt2[0]]
             y_vals = [pnt1[1], pnt2[1]]
             line_coords.append((pnt1, pnt2))
