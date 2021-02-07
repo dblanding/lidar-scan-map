@@ -111,18 +111,21 @@ class OmniCar():
         # working in radians...
         heading = math.atan2(y, x)
 
-        # calibration worked out experimentally
-        heading = heading + .44 * math.cos((heading + .175)) + .0175
-        heading = heading - math.pi / 2
+        # convert angle into degrees
+        hdg = int(heading * 180 / math.pi)
+
+        # calibration worked out experimentally (in degrees)
+        C1 = 30
+        C2 = 164
+        C3 = 93
+        cos_term = C1 * math.cos((hdg*math.pi/180) - C2*math.pi/180)
+        hdg = int(hdg - cos_term - C3)
 
         # check for sign
-        if heading < 0:
-            heading += 2 * math.pi
+        if hdg < 0:
+            hdg += 360
 
-        # convert into angle
-        heading_angle = int(heading * 180 / math.pi)
-
-        return heading_angle
+        return hdg
 
     def _read_serial_data(self):
         """Read and return one line from serial port"""
@@ -328,4 +331,4 @@ if __name__ == "__main__":
         car.read_dist()
         print(f"Distance = {car.distance}")
         print(f"Enc Val = {car.get_enc_val()}")
-        time.sleep(1)
+        time.sleep(2)
