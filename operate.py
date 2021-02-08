@@ -27,7 +27,7 @@ REV = 270  # reverse drive direction
 RGT = 0  # right drive direction
 KP = 0.25  # steering PID proportional coefficient
 KD = 0.3  # steering PID derivative coefficient
-CARSPEED = 120  # default car speed
+CARSPEED = 150  # default car speed
 RATE = 13.5  # cm/sec traveled by car @ CARSPEED = 150
 R = 50  # Distance margin for clearing obstructions
 EOW = 25  # Threshold End of Wall
@@ -237,14 +237,13 @@ def square_to_wall(nmbr=0, mapping=True):
     turn_to(target)
     logger.debug(f"heading = {car.heading()} deg")
     
-def approach_wall(carspeed, clearance, nmbr=1, mapping=True):
+def approach_wall(ddir, carspeed, clearance, nmbr=1, mapping=True):
     """
-    Approach wall at carspeed while trimming course to maintain initial
-    compass heading. Stop when distance to wall reaches clearance.
+    Drive in direction ddir at carspeed while trimming course to maintain
+    initial compass heading. Stop when distance to wall reaches clearance.
     """
 
     coords, length, angle, dist = get_closest_line_params(nmbr)
-
 
     # OK to proceed?
     if dist > clearance:
@@ -265,7 +264,7 @@ def approach_wall(carspeed, clearance, nmbr=1, mapping=True):
         logger.debug("Dist:\tTime:")
         while delta_t < time_to_travel:
             delta_t = time.time() - start
-            sonardist, *rest = car.go(carspeed, FWD, spin=pid.trim())
+            sonardist, *rest = car.go(carspeed, ddir, spin=pid.trim())
             # Equivalent lidar distance = sonardist + SONAR_LIDAR_OFFSET
             logger.debug(f"{sonardist+SONAR_LIDAR_OFFSET}\t{delta_t}")
         car.stop_wheels()
@@ -328,12 +327,12 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
         msg = f"Dist: {int(dist)}\tAngle: {angle:.2f}\tEOW: {end_of_wall:.2f}\tTrim: {trim}"
         logger.debug(msg)
         eta_data = eta.update(end_of_wall)
-        print(eta_data)
+        logger.debug(f"ETA dta: {eta_data}")
         ok_to_continue, time_to_continue = eta_data
         if not ok_to_continue:
             if time_to_continue > 0:
                 time.sleep(time_to_continue)
-            print("At end of wall. Breaking out of loop")
+            logger.debug("At end of wall. Breaking out of loop")
             break
 
     car.stop_wheels()
@@ -344,21 +343,6 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
     pprint(clad)
 
     return dist  # needed by caller for radius of next turn
-
-def round_corner(speed, turn_radius):
-    logger.debug("")
-    logger.debug(f"turning left: corner R = {int(turn_radius)}")
-    # To avoid the complication of the 360 / 0 transition,
-    # convert problem to one of aiming for a target at 180 degrees.
-    rel_heading = relative_bearing(target)
-
-    start_heading = car.heading()
-    spin_ratio = (W2W_DIST / 2 / turn_radius) / math.sqrt(2)
-    logger.debug("")
-    logger.debug(f"spin_ratio = {spin_ratio:.2f}")
-    trim = speed * spin_ratio
-    car.go(speed, 0, spin=trim)
-    car.stop_wheels()
 
 def save_scandata_as_csv(data, filename):
     write_data = []
@@ -439,8 +423,8 @@ def scan_and_plan(nmbr=None):
     return course, r
 
 if __name__ == "__main__":
+    
     '''
-    nmbr = 0
     while True:
         # scan & plan first leg of route
         nmbr += 1
@@ -464,40 +448,34 @@ if __name__ == "__main__":
             break
     '''
     n = 0
-    while n < 1:  # times through loop
+    while n < 2:  # times through loop
         nmbr = n * 100  # sequence number on saved data
-        n += 1
+
         print()
-        print(f"Squaring to wall sequence number {nmbr}")
+        print(f"Aligning to wall at left sequence number {nmbr}")
         print()
-        square_to_wall(nmbr=nmbr)
-        nmbr += 1
-        print()
-        print(f"Approaching wall sequence number {nmbr}")
-        print()
-        approach_wall(CARSPEED, CLEARANCE, nmbr=nmbr)
-        nmbr += 1
-        '''
-        approach_wall(CARSPEED, CLEARANCE, nmbr=nmbr)
-        nmbr += 1
-        print()
-        print(f"Aligning to wall sequence number {nmbr}")
-        print()
-        '''
         align_to_wall(nmbr=nmbr)
         nmbr += 1
-        print()
-        print(f"Driving along wall sequence number {nmbr}")
-        print()
         
+        print()
+        print(f"Approaching wall at left sequence number {nmbr}")
+        print()
+        approach_wall(LFT, CARSPEED, CLEARANCE, nmbr=nmbr)
+        nmbr += 1
+
+        print()
+        print(f"Driving along wall at left sequence number {nmbr}")
+        print()
         dist = drive_along_wall_on_left(CARSPEED, CLEARANCE, nmbr=nmbr)
+
         print()
         print(f"Car heading before turn = {car.heading()}")
         print(f"Turning corner")
-        '''
-        radius_turn_on_the_go(0.8 * CARSPEED, RGT, 80, dist)
+        
+        radius_turn_on_the_go(CARSPEED, FWD, 85, dist)
         print(f"Car heading after turn = {car.heading()}")
-        '''
+        n += 1
+
     sonar = car.get_sensor_data()
     print(f"Sonar data: {sonar}")
     car.close()
