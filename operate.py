@@ -121,8 +121,6 @@ def turn_to(target):
         while heading_error > 2:
             spd = heading_error + 40
             car.spin(spd)
-            #time.sleep(0.1)
-            #car.stop_wheels()
             heading_error = relative_bearing(target) - 180
             logger.debug(f"relative heading: {heading_error} deg")
             time.sleep(0.1)
@@ -130,8 +128,6 @@ def turn_to(target):
         while heading_error < -2:
             spd = heading_error - 40
             car.spin(spd)
-            #time.sleep(0.1)
-            #car.stop_wheels()
             heading_error = relative_bearing(target) - 180
             logger.debug(f"heading error: {heading_error} deg")
             time.sleep(0.1)
@@ -280,7 +276,7 @@ def approach_wall(ddir, carspeed, clearance, nmbr=1, mapping=True):
         logger.debug("Dist:\tTime:")
         while delta_t < time_to_travel:
             delta_t = time.time() - start
-            sonardist, *rest = car.go(carspeed, REV, spin=0)
+            sonardist, *rest = car.go(carspeed, ddir-180, spin=0)
             # Equivalent lidar distance = sonardist + SONAR_LIDAR_OFFSET
             logger.debug(f"{sonardist+SONAR_LIDAR_OFFSET}\t{delta_t}")
         car.stop_wheels()
@@ -302,7 +298,7 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
     # OK to proceed?
     if end_of_wall > EOW:
         eta = ETA(end_of_wall, 10)
-        car.go(carspeed, FWD)
+        car.go(carspeed, FWD, spin=8)  # est value for spin
 
     # continue to end of wall
     while end_of_wall > EOW:
@@ -321,9 +317,9 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
         
         # use wall angle feedback to trim heading
         Ka = 1  # Coefficient for heading error correction
-        trim = Ka * (angle - 80)  # This is a fudge. It ought to be 90
+        trim = Ka * (angle - 90)
 
-        car.go(carspeed, direction, spin=trim)
+        car.go(carspeed, direction, spin=trim+8)  # TODO: Add integral term
         msg = f"Dist: {int(dist)}\tAngle: {angle:.2f}\tEOW: {end_of_wall:.2f}\tTrim: {trim}"
         logger.debug(msg)
         eta_data = eta.update(end_of_wall)
