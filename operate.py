@@ -25,8 +25,9 @@ FWD = 90   # forward drive direction
 LFT = 180  # left drive direction
 REV = 270  # reverse drive direction
 RGT = 0  # right drive direction
-KP = 0.25  # steering PID proportional coefficient
-KD = 0.3  # steering PID derivative coefficient
+KP = 0.2  # steering PID proportional coefficient
+KI = 0.2  # steering PID integral coefficient
+KD = 0.4  # steering PID derivative coefficient
 CARSPEED = 150  # default car speed
 RATE = 13.5  # cm/sec traveled by car @ CARSPEED = 150
 R = 50  # Distance margin for clearing obstructions
@@ -39,18 +40,34 @@ class PID():
     def __init__(self, target):
         self.target = target
         self.prev_error = 0
-        self.trimval = 6
+        self.trimval = 8  # typical based on testing experience
+        # create a rolling list of previous (rws) error values
+        self.initial = 1
+        self.rws = 8  # rolling window size
+        self.rwl = [self.initial] * self.rws  # rolling window list
+
+    def _get_integral_error(self, hdg_err):
+        """Return rolling average error."""
+        self.rwl.insert(0, hdg_err)
+        self.rwl.pop()
+        return sum(self.rwl) / len(self.rwl)
 
     def trim(self):
         """Return value for spin"""
         hdg = car.heading()
         heading_error = hdg - self.target
-        p_term = heading_error
-        d_term = heading_error - self.prev_error
+        p_term = heading_error * KP
+        i_term = self._get_integral_error(heading_error) * KI
+        d_term = (heading_error - self.prev_error) * KD
         self.prev_error = heading_error
-        adjustment = int((p_term * KP + d_term * KD))
+        adjustment = int((p_term + i_term + d_term))
         self.trimval += adjustment
-        #logger.debug(f"P-term: {p_term:.2f}\tD-term: {d_term:.2f}\tTrim: {self.trimval}\tHDG: {int(hdg)}")
+        pstr = f"P term: {p_term:.2f}\t"
+        istr = f"I term: {i_term:.2f}\t"
+        dstr = f"D term: {d_term:.2f}\t"
+        tstr = f"Trim: {self.trimval:.2f}\t"
+        hstr = f"HDG Error: {int(hdg)-self.target}"
+        logger.debug(pstr + istr + dstr + tstr + hstr)
         return self.trimval
 
 class ETA():
@@ -442,7 +459,7 @@ if __name__ == "__main__":
             car.stop_wheels()
         else:
             break
-    '''
+    
     n = 0
     while n < 2:  # times through loop
         nmbr = n * 100  # sequence number on saved data
@@ -471,7 +488,14 @@ if __name__ == "__main__":
         radius_turn_on_the_go(CARSPEED, FWD, 85, dist)
         print(f"Car heading after turn = {car.heading()}")
         n += 1
-
+    '''
+    hdg = car.heading()
+    pid = PID(hdg)
+    n= 50
+    while n:
+        car.go(CARSPEED, FWD, spin=pid.trim())
+        n -= 1
+    car.stop_wheels()
     sonar = car.get_sensor_data()
     print(f"Sonar data: {sonar}")
     car.close()
