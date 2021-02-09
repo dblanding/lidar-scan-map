@@ -21,29 +21,36 @@ logger.debug(f"Message from Arduino: {from_arduino}")
 
 W2W_DIST = 34  # separation between coaxial wheels (cm)
 SONAR_LIDAR_OFFSET = 15  # offset distance between sonar & lidar
-FWD = 90   # forward drive direction
-LFT = 180  # left drive direction
-REV = 270  # reverse drive direction
-RGT = 0  # right drive direction
-KP = 0.2  # steering PID proportional coefficient
-KI = 0.2  # steering PID integral coefficient
-KD = 0.4  # steering PID derivative coefficient
 CARSPEED = 150  # default car speed
 RATE = 13.5  # cm/sec traveled by car @ CARSPEED = 150
 R = 50  # Distance margin for clearing obstructions
 EOW = 25  # Threshold End of Wall
 CLEARANCE = 40  # nominal wall clearance (cm)
+FWD = 90   # forward drive direction
+LFT = 180  # left drive direction
+REV = 270  # reverse drive direction
+RGT = 0  # right drive direction
+KP = 0.2  # steering PID proportional coefficient
+KI = 0.15  # steering PID integral coefficient
+KD = 0.4  # steering PID derivative coefficient
+PIDTRIM = 8  # default value for spin trim
+PIDWIN = 6  # number of values to use in rolling average
 
 class PID():
-    """Adjust trim to maintain heading using pid feedback from compass."""
+    """
+    Closed loop compass feedback used to adjust steering trim.
+    """
 
     def __init__(self, target):
+        """ Instantiate PID object before entering loop.
+
+        target is the target magnetic compass heading in degrees."""
         self.target = target
         self.prev_error = 0
-        self.trimval = 8  # typical based on testing experience
+        self.trimval = PIDTRIM
         # create a rolling list of previous (rws) error values
         self.initial = 1
-        self.rws = 8  # rolling window size
+        self.rws = PIDWIN  # rolling window size
         self.rwl = [self.initial] * self.rws  # rolling window list
 
     def _get_integral_error(self, hdg_err):
@@ -53,7 +60,7 @@ class PID():
         return sum(self.rwl) / len(self.rwl)
 
     def trim(self):
-        """Return value for spin"""
+        """Return trim value to steer toward target."""
         hdg = car.heading()
         heading_error = hdg - self.target
         p_term = heading_error * KP
@@ -62,11 +69,11 @@ class PID():
         self.prev_error = heading_error
         adjustment = int((p_term + i_term + d_term))
         self.trimval += adjustment
-        pstr = f"P term: {p_term:.2f}\t"
-        istr = f"I term: {i_term:.2f}\t"
-        dstr = f"D term: {d_term:.2f}\t"
+        pstr = f"P-term: {p_term:.2f}\t"
+        istr = f"I-term: {i_term:.2f}\t"
+        dstr = f"D-term: {d_term:.2f}\t"
         tstr = f"Trim: {self.trimval:.2f}\t"
-        hstr = f"HDG Error: {int(hdg)-self.target}"
+        hstr = f"HDG-Error: {int(hdg)-self.target}"
         logger.debug(pstr + istr + dstr + tstr + hstr)
         return self.trimval
 
@@ -110,6 +117,20 @@ class ETA():
 
         return (nmbr_of_updates_remaining, eta)
 
+
+def pid_steer_test(n=50):
+    """
+    Test PID steering operation over n cycles through feedback loop. 
+
+    Set logging level to DEBUG to see PID values printed out.
+    Allow space for car to drive FWD a few feet.
+    """
+    hdg = car.heading()
+    pid = PID(hdg)
+    while n:
+        car.go(CARSPEED, FWD, spin=pid.trim())
+        n -= 1
+    car.stop_wheels()
 
 def normalize_angle(angle):
     """convert any value of angle to a value between 0-360."""
@@ -489,13 +510,7 @@ if __name__ == "__main__":
         print(f"Car heading after turn = {car.heading()}")
         n += 1
     '''
-    hdg = car.heading()
-    pid = PID(hdg)
-    n= 50
-    while n:
-        car.go(CARSPEED, FWD, spin=pid.trim())
-        n -= 1
-    car.stop_wheels()
+    pid_steer_test(80)
     sonar = car.get_sensor_data()
     print(f"Sonar data: {sonar}")
     car.close()
