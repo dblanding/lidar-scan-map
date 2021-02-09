@@ -314,7 +314,7 @@ def approach_wall(ddir, carspeed, clearance, nmbr=1, mapping=True):
         logger.debug("Dist:\tTime:")
         while delta_t < time_to_travel:
             delta_t = time.time() - start
-            sonardist, *rest = car.go(carspeed, ddir-180, spin=0)
+            sonardist, *rest = car.go(carspeed, ddir-180, spin=PIDTRIM)
             # Equivalent lidar distance = sonardist + SONAR_LIDAR_OFFSET
             logger.debug(f"{sonardist+SONAR_LIDAR_OFFSET}\t{delta_t}")
         car.stop_wheels()
@@ -322,9 +322,13 @@ def approach_wall(ddir, carspeed, clearance, nmbr=1, mapping=True):
         print(f"Already within {int(dist)}cm of wall")
 
 def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
-    """
-    Drive FWD maintaining clearance to wall on left. Stop at end.
-    Return dist value at end.
+    """Drive FWD along wall on left to end_of_wall
+
+    Scan along the way, saving data in mumbered files, starting with nmbr.
+    Find most salient line in closest region (at left).
+    Use distance to line to adjust cross-track velocity to maintain clearance.
+    Maintain heading parallel to line angle.
+    Return distance value at end.
     """
 
     coords, length, angle, dist = get_closest_line_params(nmbr)
@@ -336,7 +340,7 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
     # OK to proceed?
     if end_of_wall > EOW:
         eta = ETA(end_of_wall, 10)
-        car.go(carspeed, FWD, spin=8)  # est value for spin
+        car.go(carspeed, FWD, spin=PIDTRIM)
 
     # continue to end of wall
     while end_of_wall > EOW:
@@ -357,7 +361,7 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
         Ka = 1  # Coefficient for heading error correction
         trim = Ka * (angle - 90)
 
-        car.go(carspeed, direction, spin=trim+8)  # TODO: Add integral term
+        car.go(carspeed, direction, spin=trim+PIDTRIM)
         msg = f"Dist: {int(dist)}\tAngle: {angle:.2f}\tEOW: {end_of_wall:.2f}\tTrim: {trim}"
         logger.debug(msg)
         eta_data = eta.update(end_of_wall)
@@ -456,6 +460,47 @@ def scan_and_plan(nmbr=None):
     pscan.map(seq_nmbr=nmbr, display_all_points=True)
     return course, r
 
+def follow_walls_left(n_cycles=2):
+    """(Align, Approach, Along, Around) x n_cycles
+
+    Align heading to (closest) wall on left,
+    Approach (sideways) to CLEARANCE. Then drive FWD
+    Along wall to end, then go
+    Around corner.
+    Repeat for n_cycles.
+
+    Save all scan data. Run remap to generate plots.
+    """
+    n = 0
+    while n < n_cycles:  # number of cycles through loop
+        nmbr = n * 100  # sequence number on saved data
+
+        print()
+        print(f"Aligning to wall at left sequence number {nmbr}")
+        print()
+        align_to_wall(nmbr=nmbr)
+        nmbr += 1
+        
+        print()
+        print(f"Approaching wall at left sequence number {nmbr}")
+        print()
+        approach_wall(LFT, CARSPEED, CLEARANCE, nmbr=nmbr)
+        nmbr += 1
+
+        print()
+        print(f"Driving along wall at left sequence number {nmbr}")
+        print()
+        dist = drive_along_wall_on_left(CARSPEED, CLEARANCE, nmbr=nmbr)
+
+        print()
+        print(f"Car heading before turn = {car.heading()}")
+        print(f"Turning around corner")
+        
+        radius_turn_on_the_go(CARSPEED, FWD, 90, dist)
+        print(f"Car heading after turn = {car.heading()}")
+        n += 1
+    
+
 if __name__ == "__main__":
     
     '''
@@ -480,37 +525,8 @@ if __name__ == "__main__":
             car.stop_wheels()
         else:
             break
-    
-    n = 0
-    while n < 2:  # times through loop
-        nmbr = n * 100  # sequence number on saved data
-
-        print()
-        print(f"Aligning to wall at left sequence number {nmbr}")
-        print()
-        align_to_wall(nmbr=nmbr)
-        nmbr += 1
-        
-        print()
-        print(f"Approaching wall at left sequence number {nmbr}")
-        print()
-        approach_wall(LFT, CARSPEED, CLEARANCE, nmbr=nmbr)
-        nmbr += 1
-
-        print()
-        print(f"Driving along wall at left sequence number {nmbr}")
-        print()
-        dist = drive_along_wall_on_left(CARSPEED, CLEARANCE, nmbr=nmbr)
-
-        print()
-        print(f"Car heading before turn = {car.heading()}")
-        print(f"Turning corner")
-        
-        radius_turn_on_the_go(CARSPEED, FWD, 85, dist)
-        print(f"Car heading after turn = {car.heading()}")
-        n += 1
     '''
-    pid_steer_test(80)
+    follow_walls_left()
     sonar = car.get_sensor_data()
     print(f"Sonar data: {sonar}")
     car.close()
