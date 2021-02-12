@@ -71,25 +71,26 @@ class ProcessScan():
         If the points in a continuous region are substantially straight &
         linear, they can be well represented by a straight line segment
         between the start and end points of the region.
-        However, if the points in a region trace an 'L' or 'U' shape, as
-        they would where walls meet at corners, we would expect to find
-        multiple straight lines, with those lines intersecting at corners.
+        If the points in a region trace an 'L' or 'U' shape, as they
+        would where walls meet at corners, we would find multiple
+        straight lines, with those lines intersecting at corners.
 
-        This method initiates the search at the beginning of the region
-        and returns a list of indexes of the found corners.
+        This method looks for the corners winthin a region by searching
+        twice, first from beginning to end as index ascends, then in
+        reverse from end to beginning. The results are compared.
+        The result which finds the longest segment is chosen.
         """
         idx0, idx1 = region  # indexes of region end points
         # Find corners with index ascending
-        corners_fwd = []
+        corners_fwd = [idx0]
         start_idx = idx0
         while start_idx != idx1:
             corner_idx = self._find_line_segment(start_idx, idx1)
             corners_fwd.append(corner_idx)
             start_idx = corner_idx
-            
 
-        # Alternatively, we could look in the reverse direction
-        corners_rev = []
+        # Alternatively, looking in the reverse direction
+        corners_rev = [idx1]
         corner_idx = idx1
         while corner_idx != idx0:
             corner_idx = self._find_line_segment(corner_idx, idx0)
@@ -99,7 +100,29 @@ class ProcessScan():
         logger.debug(f"corners forward: {corners_fwd}")
         logger.debug(f"corners reverse: {corners_rev}")
 
-        return corners_fwd
+        # find the solution with the most points in a single segment
+        largest_diff_fwd = self._largest_diff(corners_fwd)
+        largest_diff_rev = self._largest_diff(corners_rev)
+        if largest_diff_rev and largest_diff_rev > largest_diff_fwd:
+            logger.debug(f"longest line reverse: {largest_diff_rev}")
+            return corners_rev
+        else:
+            logger.debug(f"longest line forward: {largest_diff_fwd}")
+            return corners_fwd
+
+    def _largest_diff(self, intgrlst):
+        """Given a list (length n) of integers, generate a list (length n-1)
+        of the differences between adjacent integers. 
+        Return the value of the largest difference.
+        """
+        diffs = [abs(intgrlst[n] - intgrlst[n-1])
+                 for n in range(len(intgrlst))
+                 if n]
+        diffs.sort()
+        if diffs:
+            return diffs.pop()
+        else:
+            return 0
 
     def _find_line_segment(self, begin_idx, end_idx):
         """
@@ -254,10 +277,6 @@ class ProcessScan():
         for region in self.regions:
             start_idx, end_idx = region
             corners = self._find_corners(region)
-            for index in region:
-                if index not in corners:
-                    corners.append(index)
-            corners.sort()
             segments = zip(corners, corners[1:])
             all_segments.extend(segments)
         self.segments = all_segments

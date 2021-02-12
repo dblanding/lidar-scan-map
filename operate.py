@@ -118,6 +118,18 @@ class ETA():
         return (nmbr_of_updates_remaining, eta)
 
 
+class DeltaT():
+    """Home made timeit."""
+    def __init__(self):
+        self.prev = time.time()
+
+    def delta(self):
+        now = time.time()
+        delt = now - self.prev
+        self.prev = now
+        return delt
+
+
 def pid_steer_test(n=50):
     """
     Test PID steering operation over n cycles through feedback loop. 
@@ -233,7 +245,7 @@ def get_closest_line_params(nmbr, lev=5000, mapping=False):
     return line parameters as tuple (ccords, length, angle, dist)
     """
     data = save_scan(nmbr=nmbr, lev=lev)
-    pscan = proscan.ProcessScan(data, lev=lev, gap=10, fit=4)
+    pscan = proscan.ProcessScan(data, lev=lev, gap=10, fit=5)
     closest_region_idx = pscan.closest_region()
     longest_segment = pscan.segments_in_region(closest_region_idx)[0]
     line_params = pscan.get_line_parameters(longest_segment)
@@ -339,34 +351,37 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
 
     # OK to proceed?
     if end_of_wall > EOW:
+        # initialize ETA
         eta = ETA(end_of_wall, 10)
-        car.go(carspeed, FWD, spin=PIDTRIM)
 
     # continue to end of wall
-    while end_of_wall > EOW:
+    while end_of_wall > EOW:  # 2.1 seconds / loop
 
+        # Physical scanning, incl 1 rotation of rotor: 1.83 sec
         # scan and get parameters of most salient line
         nmbr += 1
         coords, length, angle, dist = get_closest_line_params(nmbr)
-        
+
         # Y coordinate of right end of wall
         end_of_wall = coords[-1][1]
-        
+
         # use dist to wall feedback for cross-track error correction
         x_track_error = dist - clearance
         Kx = 1  # Coefficient for cross track correction of travel direction
         direction = FWD + Kx * x_track_error
-        
+
         # use wall angle feedback to trim heading
         Ka = 1  # Coefficient for heading error correction
         trim = Ka * (angle - 90)
 
+        # Serial comm w/ Arduino: .25 sec
         car.go(carspeed, direction, spin=trim+PIDTRIM)
         msg = f"Dist: {int(dist)}\tAngle: {angle:.2f}\tEOW: {end_of_wall:.2f}\tTrim: {trim}"
         logger.debug(msg)
         eta_data = eta.update(end_of_wall)
         logger.debug(f"ETA dta: {eta_data}")
         ok_to_continue, time_to_continue = eta_data
+
         if not ok_to_continue:
             if time_to_continue > 0:
                 time.sleep(time_to_continue)
@@ -500,6 +515,31 @@ def follow_walls_left(n_cycles=2):
         print(f"Car heading after turn = {car.heading()}")
         n += 1
     
+def follow_walls_left_lite(n_cycles=2):
+    """(Along, Around) x n_cycles
+
+    Along wall to end, then go Around corner.
+    Repeat for n_cycles.
+
+    Save all scan data. Run remap to generate plots.
+    """
+    n = 0
+    while n < n_cycles:  # number of cycles through loop
+        nmbr = n * 100  # sequence number on saved data
+
+        print()
+        print(f"Driving along wall at left sequence number {nmbr}")
+        print()
+        dist = drive_along_wall_on_left(CARSPEED, CLEARANCE, nmbr=nmbr)
+
+        print()
+        print(f"Car heading before turn = {car.heading()}")
+        print(f"Turning around corner")
+
+        radius_turn_on_the_go(CARSPEED, FWD, 90, dist)
+        print(f"Car heading after turn = {car.heading()}")
+        n += 1
+
 
 if __name__ == "__main__":
     
@@ -526,7 +566,7 @@ if __name__ == "__main__":
         else:
             break
     '''
-    follow_walls_left()
+    follow_walls_left_lite()
     sonar = car.get_sensor_data()
     print(f"Sonar data: {sonar}")
     car.close()
