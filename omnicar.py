@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
-LEV = 10000  # Low Encoder Value (car -X direction)
+LEV = 5000  # Low Encoder Value (45-deg behind car's -X direction)
 HEV = 30000  # High Encoder Value (car +X direction)
-MEV = (HEV + LEV)//2  # Mid Encoder Value (car +Y direction)
+MEV = (HEV + LEV)//2  # Mid Encoder Value
 VLEG = 3  # optical path length of vetical leg (cm)
 
 adc = Adafruit_ADS1x15.ADS1115()

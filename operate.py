@@ -2,6 +2,7 @@
 """
 import logging
 import math
+from pathlib import Path
 import pickle
 import sys
 import time
@@ -235,7 +236,7 @@ def print_line_params(line_params):
         print(f"distance: {distance:.2f} cm")
         print()
 
-def get_closest_line_params(nmbr, lev=5000, mapping=False):
+def get_closest_line_params(nmbr, mapping=False):
     """
     Scan and return parameters of most salient line in closest region.
 
@@ -244,8 +245,8 @@ def get_closest_line_params(nmbr, lev=5000, mapping=False):
 
     return line parameters as tuple (ccords, length, angle, dist)
     """
-    data = save_scan(nmbr=nmbr, lev=lev)
-    pscan = proscan.ProcessScan(data, lev=lev, gap=10, fit=5)
+    data = save_scan(nmbr=nmbr)
+    pscan = proscan.ProcessScan(data)
     closest_region_idx = pscan.closest_region()
     longest_segment = pscan.segments_in_region(closest_region_idx)[0]
     line_params = pscan.get_line_parameters(longest_segment)
@@ -361,9 +362,10 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
         # scan and get parameters of most salient line
         nmbr += 1
         coords, length, angle, dist = get_closest_line_params(nmbr)
-
+        print(coords)
         # Y coordinate of right end of wall
         end_of_wall = coords[-1][1]
+        print(end_of_wall)
 
         # use dist to wall feedback for cross-track error correction
         x_track_error = dist - clearance
@@ -382,7 +384,7 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
         logger.debug(f"ETA dta: {eta_data}")
         ok_to_continue, time_to_continue = eta_data
 
-        if not ok_to_continue:
+        if end_of_wall < 50 and not ok_to_continue:
             if time_to_continue > 0:
                 time.sleep(time_to_continue)
             logger.debug("At end of wall. Breaking out of loop")
@@ -475,7 +477,7 @@ def scan_and_plan(nmbr=None):
     pscan.map(seq_nmbr=nmbr, display_all_points=True)
     return course, r
 
-def follow_walls_left(n_cycles=2):
+def follow_walls_left(n_cycles=3):
     """(Align, Approach, Along, Around) x n_cycles
 
     Align heading to (closest) wall on left,
@@ -515,7 +517,7 @@ def follow_walls_left(n_cycles=2):
         print(f"Car heading after turn = {car.heading()}")
         n += 1
     
-def follow_walls_left_lite(n_cycles=2):
+def follow_walls_left_lite(n_cycles=4):
     """(Along, Around) x n_cycles
 
     Along wall to end, then go Around corner.
@@ -540,9 +542,54 @@ def follow_walls_left_lite(n_cycles=2):
         print(f"Car heading after turn = {car.heading()}")
         n += 1
 
+def purge_data_folder():
+    """
+    Purge all the .pkl files in Data/ folder.
+    """
+    d = Path('Data')
+    datalist = list(d.glob('*.pkl'))
+    for file in datalist:
+        file.unlink()
+
+def plot_data():
+    """
+    Load each .pkl data file in Data/ folder, generate plot,
+    save as correspondingly numbered .png image in Maps/ folder.
+    """
+    # remove all old plots from /Maps folder
+    m = Path('Maps')
+    maplist = list(m.glob('*.png'))
+    for file in maplist:
+        file.unlink()
+
+    # generate new plots and save in 'Maps' folder
+    p = Path('Data')
+    pathlist = list(p.glob('*.pkl'))
+    for f in pathlist:
+        fname = f.stem
+        nmbr_str = fname.rpartition('data')[-1]
+        plot(nmbr_str, verbose=False, display=False)
+
+def plot(nmbr, verbose=False, display=True):
+    """
+    Load saved datafile by file 'nmbr'
+
+    if verbose: pretty print data
+    if display: display interactive plot
+    """
+    filename = f'Data/scan_data{nmbr}.pkl'
+    with open(filename, 'rb') as file:
+        data = pickle.load(file)
+    if verbose:
+        pprint.pprint(data)
+    pscan = proscan.ProcessScan(data)
+    if verbose:
+        print(f"Regions: {pscan.regions}")
+    pscan.map(seq_nmbr=nmbr, display_all_points=True, show=display)
+
 
 if __name__ == "__main__":
-    
+
     '''
     while True:
         # scan & plan first leg of route
@@ -566,7 +613,12 @@ if __name__ == "__main__":
         else:
             break
     '''
+    print("Purging data folder")
+    purge_data_folder()
+    print("Running car")
     follow_walls_left_lite()
+    print("plotting data")
+    plot_data()
     sonar = car.get_sensor_data()
     print(f"Sonar data: {sonar}")
     car.close()

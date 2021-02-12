@@ -14,8 +14,8 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 style.use('fivethirtyeight')
 
 # Default values used in ProcessScan
-GAP = 12  # Threshold distance between adjacent points for continuity
-FIT = 3  # Threshold distance (point to line) for good fit
+GAP = 10  # Threshold distance between adjacent points for continuity
+FIT = 4  # Threshold distance (point to line) for good fit
 
 def encoder_count_to_radians(enc_val):
     """
@@ -24,7 +24,7 @@ def encoder_count_to_radians(enc_val):
     X axis to the right, Y axis straight ahead
     theta = 0 along positive X axis, increaasing CCW
     """
-    theta = (oc.HEV - enc_val) * math.pi / (oc.HEV - oc.LEV)
+    theta = (30000 - enc_val) * math.pi / (30000 - 10000)
     return theta
 
 
@@ -95,6 +95,7 @@ class ProcessScan():
         while corner_idx != idx0:
             corner_idx = self._find_line_segment(corner_idx, idx0)
             corners_rev.append(corner_idx)
+        corners_rev.sort()
 
         logger.debug(f"region: {region}")
         logger.debug(f"corners forward: {corners_fwd}")
