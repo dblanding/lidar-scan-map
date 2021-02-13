@@ -12,7 +12,7 @@ import proscan
 from pprint import pprint
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = oc.OmniCar()
@@ -27,7 +27,7 @@ RATE = 13.5  # cm/sec traveled by car @ CARSPEED = 150
 R = 50  # Distance margin for clearing obstructions
 EOW = 25  # Threshold End of Wall
 CLEARANCE = 40  # nominal wall clearance (cm)
-FWD = 90   # forward drive direction
+FWD = 94   # forward drive direction (with 4 deg cross-track correction)
 LFT = 180  # left drive direction
 REV = 270  # reverse drive direction
 RGT = 0  # right drive direction
@@ -143,6 +143,34 @@ def pid_steer_test(n=50):
     while n:
         car.go(CARSPEED, FWD, spin=pid.trim())
         n -= 1
+    car.stop_wheels()
+
+def drive_ahead(dist):
+    """drive dist and stop."""
+
+    # instantiate PID steering
+    target = int(car.heading())
+    pid = PID(target)
+
+    # drive
+    time_to_travel = dist / RATE
+    start = time.time()
+    delta_t = 0
+    while delta_t < time_to_travel:
+        delta_t = time.time() - start
+        _ = car.go(CARSPEED, FWD, spin=pid.trim())
+    car.stop_wheels()
+
+def drive_ahead(dist):
+    """drive dist and stop. (no pid steering)"""
+
+    # drive
+    time_to_travel = dist / RATE
+    start = time.time()
+    delta_t = 0
+    while delta_t < time_to_travel:
+        delta_t = time.time() - start
+        _ = car.go(CARSPEED, FWD, spin=PIDTRIM)
     car.stop_wheels()
 
 def normalize_angle(angle):
@@ -426,54 +454,6 @@ def save_scan(nmbr=None, lev=oc.LEV, hev=oc.HEV):
     #save_scandata_as_csv(data, f'Data/scan_data{nmbr}.csv')
     return data
 
-def scan_and_plan(nmbr=None):
-    """Scan, save data and analyze. Return course & distance to open sector.
-    """
-    if nmbr is None:
-        nmbr = ''
-    data = save_scan(nmbr)
-    pscan = proscan.ProcessScan(data)
-    logger.debug(f"Regions = {pscan.regions}")
-    logger.debug(f"Zero Regions = {pscan.zero_regions}")
-
-    # find indexes of non-zero regions sorted by number of points
-    long_regs = pscan.regions_by_length()
-    for idx in pscan.zero_regions:
-        long_regs.remove(idx)
-
-    # find just left region and right region
-    long2regs = long_regs[:2]
-    long2regs.sort()
-    try:
-        left_region, right_region = long2regs
-    except ValueError:
-        pscan.map(seq_nmbr=nmbr, display_all_points=True)
-        return 0, 0
-
-    # find 'far' end of L & R regions as it will be the constriction
-    left_pnt_indx = pscan.regions[left_region][-1]
-    right_pnt_indx = pscan.regions[right_region][0]
-
-    # find coords of each point
-    left_pnt = pscan.points[left_pnt_indx].get("xy")
-    right_pnt = pscan.points[right_pnt_indx].get("xy")
-    logger.debug(f"Left point: {left_pnt}")
-    logger.debug(f"Right point: {right_pnt}")
-
-    # construct waypoint halfway between left and right points
-    waypnt = geo.midpoint(left_pnt, right_pnt)
-    
-    # Path to travel from origin to waypoint (in center of gap)
-    r = int(geo.p2p_dist((0,0), waypnt))
-    theta = int(geo.p2p_angle((0,0), waypnt))  # w/r/t +X direction
-    course = theta - 90  # relative to +Y direction
-
-    # print results and display map
-    logger.debug(f"Relative course: {course}")
-    logger.debug(f"Travel Distance: {r}")
-    pscan.map(seq_nmbr=nmbr, display_all_points=True)
-    return course, r
-
 def follow_walls_left(n_cycles=3):
     """(Align, Approach, Along, Around) x n_cycles
 
@@ -601,26 +581,55 @@ def plot(nmbr, verbose=False, display=True):
         print(f"Regions: {pscan.regions}")
     pscan.map(seq_nmbr=nmbr, display_all_points=True, show=display)
 
-def drive_ahead(dist):
-    """drive dist and stop."""
+def scan_and_plan(nmbr=None):
+    """Scan, save data and analyze. Return course & distance to open sector.
+    """
+    if nmbr is None:
+        nmbr = ''
+    data = save_scan(nmbr)
+    pscan = proscan.ProcessScan(data)
+    logger.debug(f"Regions = {pscan.regions}")
+    logger.debug(f"Zero Regions = {pscan.zero_regions}")
 
-    # instantiate PID steering
-    target = int(car.heading())
-    pid = PID(target)
+    # find indexes of non-zero regions sorted by number of points
+    long_regs = pscan.regions_by_length()
+    for idx in pscan.zero_regions:
+        long_regs.remove(idx)
+
+    # find just left region and right region
+    long2regs = long_regs[:2]
+    long2regs.sort()
+    try:
+        left_region, right_region = long2regs
+    except ValueError:
+        pscan.map(seq_nmbr=nmbr, display_all_points=True)
+        return 0, 0
+
+    # find 'far' end of L & R regions as it will be the constriction
+    left_pnt_indx = pscan.regions[left_region][-1]
+    right_pnt_indx = pscan.regions[right_region][0]
+
+    # find coords of each point
+    left_pnt = pscan.points[left_pnt_indx].get("xy")
+    right_pnt = pscan.points[right_pnt_indx].get("xy")
+    logger.debug(f"Left point: {left_pnt}")
+    logger.debug(f"Right point: {right_pnt}")
+
+    # construct waypoint halfway between left and right points
+    waypnt = geo.midpoint(left_pnt, right_pnt)
     
-    # drive
-    time_to_travel = dist / RATE
-    start = time.time()
-    delta_t = 0
-    while delta_t < time_to_travel:
-        delta_t = time.time() - start
-        _ = car.go(CARSPEED, FWD, spin=pid.trim())
-    car.stop_wheels()
+    # Path to travel from origin to waypoint (in center of gap)
+    r = int(geo.p2p_dist((0,0), waypnt))
+    theta = int(geo.p2p_angle((0,0), waypnt))  # w/r/t +X direction
+    course = theta - 90  # relative to +Y direction
 
+    # print results and display map
+    logger.debug(f"Relative course: {course}")
+    logger.debug(f"Travel Distance: {r}")
+    pscan.map(seq_nmbr=nmbr, display_all_points=True)
+    return course, r
 
-if __name__ == "__main__":
-
-    '''
+def drive_to_open_sector(nmbr):
     while True:
         # scan & plan first leg of route
         nmbr += 1
@@ -634,14 +643,40 @@ if __name__ == "__main__":
             turn_to(heading - course_deg)
 
             # drive car to waypoint along prescribed path
-            drive_time = r / RATE
-            pid = PID(car.heading())
-            start_time = time.time()
-            while time.time()-start_time < drive_time:
-                dist, *rest = car.go(CARSPEED, FWD, spin=pid.trim())
-            car.stop_wheels()
+            drive_ahead(r)
         else:
             break
+def drive_to_spot():
+    """Scan, ask for spot to drive to & display interactive map
+    User then inpts coordinates of destination. Repeat."""
+    nmbr = 0
+    while True:
+        # scan & display plot
+        data = save_scan(nmbr)
+        pscan = proscan.ProcessScan(data)
+        pscan.map(seq_nmbr=nmbr, show=True)
+        coordstr = input("Enter x, y coords of target, q to quit: ")
+        if ',' in coordstr:
+            xstr, ystr = coordstr.split(',')
+            x = int(xstr)
+            y = int(ystr)
+            coords = (x, y)
+        else:
+            break
+        r, theta = geo.r2p(coords)
+        target_angle = int(theta - 90)
+        print(f"Turning {target_angle} degrees")
+        turn_to(car.heading()-target_angle)
+        print(f"Driving {r} cm")
+        drive_ahead(r)
+        nmbr += 1
+        
+
+if __name__ == "__main__":
+
+    drive_to_spot()
+    #drive_to_open_sector(0)
+    #follow_walls_left_lite(1)
     '''
     print("Purging data folder")
     purge_data_folder()
@@ -651,4 +686,5 @@ if __name__ == "__main__":
     plot_data()
     sonar = car.get_sensor_data()
     print(f"Sonar data: {sonar}")
+    '''
     car.close()
