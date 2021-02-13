@@ -394,7 +394,7 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
     logger.debug(f"Final Scan: {nmbr}")
     pprint(clad)
 
-    return dist  # needed by caller for radius of next turn
+    return clad  # needed by caller for next turn
 
 def save_scandata_as_csv(data, filename):
     write_data = []
@@ -504,7 +504,8 @@ def follow_walls_left(n_cycles=3):
         print()
         print(f"Driving along wall at left sequence number {nmbr}")
         print()
-        dist = drive_along_wall_on_left(CARSPEED, CLEARANCE, nmbr=nmbr)
+        clad = drive_along_wall_on_left(CARSPEED, CLEARANCE, nmbr=nmbr)
+        *rest, dist = clad
 
         print()
         print(f"Car heading before turn = {car.heading()}")
@@ -529,14 +530,30 @@ def follow_walls_left_lite(n_cycles=1):
         print()
         print(f"Driving along wall at left sequence number {nmbr}")
         print()
-        dist = drive_along_wall_on_left(CARSPEED, CLEARANCE, nmbr=nmbr)
+        clad = drive_along_wall_on_left(CARSPEED, CLEARANCE, nmbr=nmbr)
+        coords, length, angle, dist = clad
+
+        # Calculate bevel turn
+        end_of_wall = coords[-1][1]
+        if end_of_wall > 0.5 * CLEARANCE:
+            print("Didn't reach end of wall")
+            break
+        y = CLEARANCE+end_of_wall
+        x = -dist
+        turn_angle1 = math.atan2(y, x) * 180 / math.pi - 90
+        drive_dist = math.sqrt(x**2 + y**2)
+        turn_angle2 = 90 - turn_angle1
+        print()
+        print(f"Car turning left {turn_angle1:.0f} degrees")
+        turn_to(car.heading() - turn_angle1)
 
         print()
-        print(f"Car heading before turn = {car.heading()}")
-        print(f"Turning around corner")
-
-        radius_turn_on_the_go(CARSPEED, FWD, 90, dist)
-        print(f"Car heading after turn = {car.heading()}")
+        print(f"Car driving {drive_dist} cm")
+        drive_ahead(drive_dist)
+        
+        print()
+        print(f"Car turning left {turn_angle2:.0f} degrees")
+        turn_to(car.heading() - turn_angle2)
         n += 1
 
 def purge_data_folder():
@@ -583,6 +600,22 @@ def plot(nmbr, verbose=False, display=True):
     if verbose:
         print(f"Regions: {pscan.regions}")
     pscan.map(seq_nmbr=nmbr, display_all_points=True, show=display)
+
+def drive_ahead(dist):
+    """drive dist and stop."""
+
+    # instantiate PID steering
+    target = int(car.heading())
+    pid = PID(target)
+    
+    # drive
+    time_to_travel = dist / RATE
+    start = time.time()
+    delta_t = 0
+    while delta_t < time_to_travel:
+        delta_t = time.time() - start
+        _ = car.go(CARSPEED, FWD, spin=pid.trim())
+    car.stop_wheels()
 
 
 if __name__ == "__main__":
