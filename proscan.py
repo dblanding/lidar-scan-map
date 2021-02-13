@@ -21,8 +21,12 @@ def encoder_count_to_radians(enc_val):
     """
     Convert encoder count to angle (radians) in car coordinate system
 
-    X axis to the right, Y axis straight ahead
-    theta = 0 along positive X axis, increaasing CCW
+    encoder_count values start at 0 and increase with CW rotation.
+    straight back (-Y axis): enc_val = 0; theta = 3*pi/2
+    straight left (-X axis): enc_val = 10,000; theta = pi
+    straight ahead (+Y axis): enc_val = 20,000; theta = pi/2
+    straight right (+X axis): enc_val = 30,000; theta = 0
+    (enc_cnt tops out at 32765, so no info past that)
     """
     theta = (30000 - enc_val) * math.pi / (30000 - 10000)
     return theta
@@ -31,13 +35,13 @@ def encoder_count_to_radians(enc_val):
 class ProcessScan():
     """
     Generate points and find set of best fit lines from scan data.
-    Plot points and/or lines. Display and/or save plot image.
+    Plot points and/or lines. Generate plot image.
     """
 
     def __init__(self, data, lev=None, hev=None, gap=None, fit=None):
-        """Generate list of point dicts from (scan) data.
-        Optionally specify: sector of interest
-        from lev (low encoder value) to hev (high encoder value),
+        """Generate list of point dictionaries from (scan) data.
+        Optionally specify: sector of interest from
+        lev (low encoder value) to hev (high encoder value),
         gap (threshold distance between adjacent points for continuity),
         fit (threshold point to line distance to qualify as 'good' fit).
         """
@@ -68,20 +72,31 @@ class ProcessScan():
 
     def _find_corners(self, region):
         """
+        Return list of indexes of points representing the end points
+        of linked straight line segments spanning the region.
+        The returned list includes the region end points as well as the
+        corners where the straight line segnments join.
+
+        How it is done:
+        This method looks for corners by testing for fit, point by point
+        with linked straight line segments within region. Test is done
+        twice, first from beginning to end as index increases, then in
+        reverse from end to beginning. The two results are compared.
+        The result chosen is the one which finds the segment containing
+        the greatest number of points, thus discouraaging the detection
+        of 'false' corners in sections of wall that are really straight.
+        The list of indexes returned are sorted lowest first.
+
+        Background info:
         If the points in a continuous region are substantially straight &
         linear, they can be well represented by a straight line segment
-        between the start and end points of the region.
-        If the points in a region trace an 'L' or 'U' shape, as they
-        would where walls meet at corners, we would find multiple
-        straight lines, with those lines intersecting at corners.
-
-        This method looks for the corners winthin a region by searching
-        twice, first from beginning to end as index ascends, then in
-        reverse from end to beginning. The results are compared.
-        The result which finds the longest segment is chosen.
+        between the start and end points of the region. However, if the
+        points in a region trace an 'L' or zig-zag shape, as they would
+        where walls meet at corners, we would find multiple straight
+        lines segments linked at the corners.
         """
         idx0, idx1 = region  # indexes of region end points
-        # Find corners with index ascending
+        # Find corners startng with lowest index
         corners_fwd = [idx0]
         start_idx = idx0
         while start_idx != idx1:
@@ -89,7 +104,7 @@ class ProcessScan():
             corners_fwd.append(corner_idx)
             start_idx = corner_idx
 
-        # Alternatively, looking in the reverse direction
+        # now find corners starting with highest index
         corners_rev = [idx1]
         corner_idx = idx1
         while corner_idx != idx0:
@@ -119,7 +134,7 @@ class ProcessScan():
         diffs = [abs(intgrlst[n] - intgrlst[n-1])
                  for n in range(len(intgrlst))
                  if n]
-        diffs.sort()
+        diffs.sort()  # largest last
         if diffs:
             return diffs.pop()
         else:
@@ -168,8 +183,8 @@ class ProcessScan():
 
     def _find_local_min(self, region):
         """
-        For points between indx0 & indx1, return a tuple (dist, index)
-        of the last point foune having the minimum dist value.
+        For points in a continuoous region, return a tuple (dist, index)
+        of the last point found having the minimum dist value.
         """
         indx0, indx1 = region
         mindist = ()
@@ -182,11 +197,12 @@ class ProcessScan():
         return min_indx_list
 
     def _find_p2p_angles_of_pnts(self, indx0, indx1):
-        """Tabulate point to point angle of a serries of adjacent points."""
+        """Tabulate point to point angle of a series of adjacent points."""
         indexlist = [indx for indx in range(indx0, indx1)]
         slopelist = []
         for indx in indexlist:
-            slope = geo.p2p_angle(points[indx].get("xy"), points[indx + 1].get("xy"))
+            slope = geo.p2p_angle(points[indx].get("xy"),
+                                  points[indx + 1].get("xy"))
             slopelist.append(slope)
         return zip(indexlist, slopelist)
 
@@ -215,12 +231,6 @@ class ProcessScan():
         populate self.points list with point dicts
 
         data: (encoder_count, distance, byte_count, delta_time)
-
-        encoder_count values start at 0 and increase with CW rotation.
-        straight left: enc_val = self.LEV; theta = pi
-        straight ahead: enc_val = self.MEV; theta = pi/2
-        straight right: enc_val = self.HEV; theta = 0
-        (enc_cnt tops out at 32765, so no info past that)
         """
         points = []
         for record in data:
@@ -306,7 +316,7 @@ class ProcessScan():
         """
         Search for non-zero points in region where
         region is a 2 element tuple (low_index, hi_index)
-        Return (dist, index) tuple of closest point.
+        Return (dist, index) tuple of closest point (to car).
         dist is the lowest distance value found and
         index is the highest index having this value.
         """
@@ -321,7 +331,7 @@ class ProcessScan():
         return (lowest_dist_val, idx_of_lowest_val)
 
     def closest_region(self):
-        """Return index of closest non-zero region."""
+        """Return index of non-zero region closest to car."""
         minlist = []
         for idx, region in enumerate(self.regions):
             if idx not in self.zero_regions:
@@ -380,7 +390,7 @@ class ProcessScan():
 
         Optional args:
         display_all_points=False to plot only points in regions
-        seq_nmbr to append to save_file_name
+        seq_nmbr appended to save_file_name
         show=True to display an interactive plot (which blocks program).
         """
 

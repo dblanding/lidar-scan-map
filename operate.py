@@ -39,7 +39,7 @@ PIDWIN = 6  # number of values to use in rolling average
 
 class PID():
     """
-    Closed loop compass feedback used to adjust steering trim.
+    Closed loop compass feedback used to adjust steering trim underway.
     """
 
     def __init__(self, target):
@@ -94,7 +94,7 @@ class ETA():
         """
         Based on value, predict time to arrive at target.
 
-        Return 2-element tuple: (eta > delta_time (boolean), eta (float))
+        Return 2-element tuple: (reads remaining (int), eta (float))
         """
         now = time.time()
         self.delta_time = now - self.prev_time
@@ -146,7 +146,7 @@ def pid_steer_test(n=50):
     car.stop_wheels()
 
 def normalize_angle(angle):
-    """convert any value of angle to a value between 0-360."""
+    """Convert any value of angle to a value between 0-360."""
     while angle < 0:
         angle += 360
     while angle > 360:
@@ -255,7 +255,7 @@ def get_closest_line_params(nmbr, mapping=False):
     return line_params
 
 def align_to_wall(nmbr=0, mapping=True):
-    """Spin car to align Y-axis to wall that is close in front."""
+    """Spin car to align Y-axis to wall that is closest."""
 
     coords, length, angle, dist = get_closest_line_params(nmbr)
 
@@ -348,7 +348,6 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
 
     # Y coordinate of far end of wall
     end_of_wall = coords[-1][1]
-    print(f"end_of_wall = {end_of_wall}")
 
     # OK to proceed?
     if end_of_wall > EOW:
@@ -362,10 +361,8 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
         # scan and get parameters of most salient line
         nmbr += 1
         coords, length, angle, dist = get_closest_line_params(nmbr)
-        print(coords)
-        # Y coordinate of right end of wall
+        # Y coordinate of far end of wall
         end_of_wall = coords[-1][1]
-        print(end_of_wall)
 
         # use dist to wall feedback for cross-track error correction
         x_track_error = dist - clearance
@@ -382,11 +379,11 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
         logger.debug(msg)
         eta_data = eta.update(end_of_wall)
         logger.debug(f"ETA dta: {eta_data}")
-        ok_to_continue, time_to_continue = eta_data
+        scans_remaining, time_remaining = eta_data
 
-        if end_of_wall < 50 and not ok_to_continue:
-            if time_to_continue > 0:
-                time.sleep(time_to_continue)
+        if end_of_wall < 50 and not scans_remaining:
+            if time_remaining > 0:
+                time.sleep(time_remaining)
             logger.debug("At end of wall. Breaking out of loop")
             break
 
@@ -394,7 +391,7 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
     # final scan
     nmbr += 1
     clad = get_closest_line_params(nmbr)
-    print(f"Final Scan: {nmbr}")
+    logger.debug(f"Final Scan: {nmbr}")
     pprint(clad)
 
     return dist  # needed by caller for radius of next turn
@@ -517,13 +514,13 @@ def follow_walls_left(n_cycles=3):
         print(f"Car heading after turn = {car.heading()}")
         n += 1
     
-def follow_walls_left_lite(n_cycles=4):
+def follow_walls_left_lite(n_cycles=1):
     """(Along, Around) x n_cycles
 
     Along wall to end, then go Around corner.
     Repeat for n_cycles.
 
-    Save all scan data. Run remap to generate plots.
+    Save all scan data. Run plot_data to generate plots.
     """
     n = 0
     while n < n_cycles:  # number of cycles through loop
@@ -616,7 +613,7 @@ if __name__ == "__main__":
     print("Purging data folder")
     purge_data_folder()
     print("Running car")
-    follow_walls_left_lite()
+    follow_walls_left_lite(2)
     print("plotting data")
     plot_data()
     sonar = car.get_sensor_data()
