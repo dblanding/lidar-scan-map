@@ -72,9 +72,9 @@ class PID():
         self.prev_error = heading_error
         adjustment = int((p_term + i_term + d_term))
         self.trimval += adjustment
-        pstr = f"P-term: {p_term:.2f}\t"
-        istr = f"I-term: {i_term:.2f}\t"
-        dstr = f"D-term: {d_term:.2f}\t"
+        pstr = f"P: {p_term:.2f}\t"
+        istr = f"I: {i_term:.2f}\t"
+        dstr = f"D: {d_term:.2f}\t"
         tstr = f"Trim: {self.trimval:.2f}\t"
         hstr = f"HDG-Error: {heading_error:.0f}"
         logger.debug(pstr + istr + dstr + tstr + hstr)
@@ -673,10 +673,10 @@ def drive_to_open_sector(nmbr):
 
 def drive_to_spot(spd=None):
     """
-    Scan & display interactive map.
-    User examines map to find x,y coords of spot to drive to.
-    User closes map and inputs coordinates.
-    Car drives to spot selected. Repeat.
+    Scan & display interactive map with proposed target spot shown.
+    User then closes map and either enters 'y' to agree to proposed
+    spot or 'c' to input coordinates of an alternate one.
+    Car drives to spot. Repeat.
     """
     if not spd:
         spd = CARSPEED
@@ -685,17 +685,20 @@ def drive_to_spot(spd=None):
         # scan & display plot
         data = save_scan(nmbr)
         pscan = proscan.ProcessScan(data)
-        open_sctrs = pscan.open_sectors(100)
-        pprint(open_sctrs)
+        pscan.auto_detect_open_sector()
         pscan.map(seq_nmbr=nmbr, show=True)
 
         # get coords from user
-        coordstr = input("Enter x, y coords of target, q to quit: ")
-        if ',' in coordstr:
-            xstr, ystr = coordstr.split(',')
-            x = int(xstr)
-            y = int(ystr)
-            coords = (x, y)
+        char = input("Drive to yellow dot? y (c to enter coords): ")
+        if char in 'yY':
+            coords = pscan.target
+        elif char in 'cC':
+            coordstr = input("Enter x, y coords: ")
+            if ',' in coordstr:
+                xstr, ystr = coordstr.split(',')
+                x = int(xstr)
+                y = int(ystr)
+                coords = (x, y)
         else:
             break
 
@@ -707,7 +710,6 @@ def drive_to_spot(spd=None):
         print(f"Driving {r:.1f} cm")
         drive_ahead(r, spd=spd)
         nmbr += 1
-        
 
 if __name__ == "__main__":
 

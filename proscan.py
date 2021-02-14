@@ -45,6 +45,7 @@ class ProcessScan():
         gap (threshold distance between adjacent points for continuity),
         fit (threshold point to line distance to qualify as 'good' fit).
         """
+        self.target = None
         self.LEV = lev
         self.HEV = hev
         self.GAP = gap
@@ -414,6 +415,13 @@ class ProcessScan():
         title = f"({len(self.points)} pts) GAP={self.GAP}, FIT={self.FIT}"
         plt.title(title)
 
+        # plot target point
+        if self.target:
+            x, y = self.target
+            tx = [x]
+            ty = [y]
+            plt.scatter(tx, ty, color='#FFA500')
+
         # plot line segments
         line_coords = []  # x, y coordinates
         for segment in self.segments:
@@ -462,3 +470,32 @@ class ProcessScan():
         if sector not in set(sectors):
             sectors.append(sector)
         return sectors
+
+    def auto_detect_open_sector(self):
+        """ Under development...
+        First find average dist value (not == -3).
+        Then look for sectors at radius = 1.5 * average.
+        Put target at mid-anlge at radius/2.
+        Convert to (x, y) coords and save as self.target
+        so that map can access it.
+        """
+        # Find average (non-zero) dist value
+        rvals = [point.get('dist')
+                 for point in self.points
+                 if point.get('dist') != 3]
+        avgdist = sum(rvals)/len(rvals)
+
+        # make radius somewhat larger
+        radius = avgdist * 1.5
+        print(f"radius: {int(radius)}")
+        sectors = self.open_sectors(radius)
+        print(sectors)
+
+        # Find first sector of reaonable width
+        for sector in sectors:
+            angle0, angle1 = sector
+            if (angle0 - angle1) > 12:
+                target_angle = (angle0 + angle1)/2
+                target_coords = geo.p2r(radius/2, target_angle)
+                self.target = target_coords
+                break

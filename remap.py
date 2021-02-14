@@ -1,6 +1,7 @@
 """
 Development tool for remapping scan data
 """
+import math
 from pathlib import Path
 import pickle
 import pprint
@@ -35,6 +36,23 @@ def plot_all():
         nmbr_str = fname.rpartition('data')[-1]
         remap(nmbr_str, verbose=False, display=False)
 
+def polar_coords():
+    """
+    Get polar coords of all the points in scan.
+    """
+    nmbr = input("Enter 'all' or integer number of data to load: ")
+    if nmbr.isnumeric():
+        filename = f'Data/scan_data{nmbr}.pkl'
+        with open(filename, 'rb') as file:
+            data = pickle.load(file)
+        pscan = proscan.ProcessScan(data)
+        #for point in pscan.points:
+            #print(f"{point.get('theta')*180/math.pi}, {point.get('dist')}")
+        rvals = [point.get('dist')
+                 for point in pscan.points
+                 if point.get('dist') != 3]
+        print(sum(rvals)/len(rvals))
+    
 def function_name(arguments):
     """
     1. Description of what the function does.
@@ -46,6 +64,7 @@ def function_name(arguments):
     return None
 
 if __name__ == '__main__':
+    '''
     nmbr = input("Enter 'all' or integer number of data to load: ")
     if nmbr == 'all':
         # plot all datafiles
@@ -53,3 +72,5 @@ if __name__ == '__main__':
     elif nmbr.isnumeric():
         # generate individual interactive plot
         remap(nmbr)
+    '''
+    polar_coords()
