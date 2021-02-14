@@ -23,6 +23,7 @@ logger.debug(f"Message from Arduino: {from_arduino}")
 W2W_DIST = 34  # separation between coaxial wheels (cm)
 SONAR_LIDAR_OFFSET = 15  # offset distance between sonar & lidar
 CARSPEED = 150  # default car speed
+SONAR_STOP = 20  # threshold E-stop distance (cm) 
 R = 50  # Distance margin for clearing obstructions
 EOW = 25  # Threshold End of Wall
 CLEARANCE = 40  # nominal wall clearance (cm)
@@ -153,7 +154,7 @@ def pid_steer_test(n=50):
     car.stop_wheels()
 
 def drive_ahead(dist, spd=None):
-    """drive dist and stop."""
+    """Drive dist and stop."""
     if not spd:
         spd = CARSPEED
     # instantiate PID steering
@@ -167,13 +168,18 @@ def drive_ahead(dist, spd=None):
     delta_t = 0
     while delta_t < time_to_travel:
         delta_t = time.time() - start
-        _ = car.go(spd, FWD, spin=pid.trim())
+        sonardist, *rest = car.go(spd, FWD, spin=pid.trim())
+        if sonardist < SONAR_STOP:
+            print("Bumped into an obstacle!")
+            car.stop_wheels()
+            break
     car.stop_wheels()
 
-def drive_ahead2(dist, spd=None):
-    """drive dist and stop. (no pid steering)"""
+def drive_ahead_no_steer(dist, spd=None):
+    """Drive dist and stop. (no pid steering)"""
     if not spd:
         spd = CARSPEED
+
     # drive
     rate = get_rate(spd)  # cm/sec
     time_to_travel = dist / rate
@@ -181,7 +187,11 @@ def drive_ahead2(dist, spd=None):
     delta_t = 0
     while delta_t < time_to_travel:
         delta_t = time.time() - start
-        _ = car.go(spd, FWD, spin=PIDTRIM)
+        sonardist, *rest = car.go(spd, FWD, spin=PIDTRIM)
+        if sonardist < SONAR_STOP:
+            print("Bumped into an obstacle!")
+            car.stop_wheels()
+            break
     car.stop_wheels()
 
 def normalize_angle(angle):
@@ -200,7 +210,7 @@ def relative_bearing(target):
     return normalize_angle(rel_brng)
 
 def turn_to(target):
-    """Turn (while stopped) toward target course (degrees)."""
+    """Turn (while stopped) to absolute target course (degrees)."""
     target = normalize_angle(target)
     # To avoid the complication of the 360 / 0 transition,
     # convert problem to one of aiming for a target at 180 degrees.
@@ -228,7 +238,7 @@ def turn_to(target):
 
 def _turn_on_the_go(speed, target, direction, spin_ratio):
     """
-    Turn toward target course (degrees) while going in direction.
+    Turn to target course (degrees) while going in direction.
     (For example, direction = FWD for straight ahead.)
     """
     target = normalize_angle(target)
@@ -251,8 +261,10 @@ def _turn_on_the_go(speed, target, direction, spin_ratio):
     car.stop_wheels()
 
 def radius_turn_on_the_go(speed, direction, angle, turn_radius):
-    """Turn car angle degrees (CCW positive) at turn_radius (cm)
-    while underway in direction (eg: LFT, FWD or RGT)."""
+    """
+    Turn (relative) angle degrees (CCW +) at turn_radius (cm)
+    while driving at speed in direction (eg: LFT, FWD or RGT).
+    """
     spin_ratio = (W2W_DIST / 2 / turn_radius) / math.sqrt(2)
     trim = speed * spin_ratio
     target = car.heading() - angle
@@ -294,7 +306,7 @@ def get_closest_line_params(nmbr, mapping=False):
     return line_params
 
 def align_to_wall(nmbr=0, mapping=True):
-    """Spin car to align Y-axis to wall that is closest."""
+    """Spin in place to align Y-axis to closest wall."""
 
     coords, length, angle, dist = get_closest_line_params(nmbr)
 
@@ -309,7 +321,7 @@ def align_to_wall(nmbr=0, mapping=True):
     logger.debug(f"heading = {car.heading()} deg")
     
 def square_to_wall(nmbr=0, mapping=True):
-    """Spin car to aim squarely at wall that is close in front."""
+    """Spin in pace to aim squarely at closest wall."""
 
     coords, length, angle, dist = get_closest_line_params(nmbr)
 
@@ -325,8 +337,9 @@ def square_to_wall(nmbr=0, mapping=True):
     
 def approach_wall(ddir, carspeed, clearance, nmbr=1, mapping=True):
     """
-    Drive in direction ddir at carspeed while trimming course to maintain
-    initial compass heading. Stop when distance to wall reaches clearance.
+    Drive in direction ddir at carspeed, trimming course to maintain
+    initial compass heading.
+    Stop when distance to wall reaches clearance.
     """
 
     coords, length, angle, dist = get_closest_line_params(nmbr)
@@ -380,8 +393,8 @@ def drive_along_wall_on_left(carspeed, clearance, nmbr=2, mapping=True):
 
     Scan along the way, saving data in mumbered files, starting with nmbr.
     Find most salient line in closest region (at left).
-    Use distance to line to adjust cross-track velocity to maintain clearance.
-    Maintain heading parallel to line angle.
+    Adjust cross-track velocity to maintain distance to wall (line).
+    Adjust steering to maintain heading parallel to line angle.
     Return distance value at end.
     """
 
@@ -455,9 +468,7 @@ def find_std_dev(datalist):
     return mean, std_dev
 
 def save_scan(nmbr=None, lev=oc.LEV, hev=oc.HEV):
-    """
-    Scan and save data in numbered file. Return data.
-    """
+    """Scan and save data in numbered file. Return data."""
     if nmbr is None:
         nmbr = ''
     data = car.scan(lev=lev, hev=hev)
@@ -526,7 +537,7 @@ def follow_walls_left_lite(n_cycles=1):
         clad = drive_along_wall_on_left(CARSPEED, CLEARANCE, nmbr=nmbr)
         coords, length, angle, dist = clad
 
-        # Calculate bevel turn
+        # Make bevel turn at end of wall
         end_of_wall = coords[-1][1]
         if end_of_wall > 0.5 * CLEARANCE:
             print("Didn't reach end of wall")
@@ -644,7 +655,7 @@ def scan_and_plan(nmbr=None):
 
 def drive_to_open_sector(nmbr):
     while True:
-        # scan & plan first leg of route
+        # scan & plan one leg of trip
         nmbr += 1
         heading = car.heading()
         print(f"Car initial heading = {heading}")
@@ -659,9 +670,14 @@ def drive_to_open_sector(nmbr):
             drive_ahead(r)
         else:
             break
+
 def drive_to_spot(spd=None):
-    """Scan, ask for spot to drive to & display interactive map
-    User then inputs coordinates of destination. Repeat."""
+    """
+    Scan & display interactive map.
+    User examines map to find x,y coords of spot to drive to.   
+    User closes map and inputs coordinates.
+    Car drives to spot selected. Repeat.
+    """
     if not spd:
         spd = CARSPEED
     nmbr = 0
