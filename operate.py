@@ -12,7 +12,7 @@ import proscan
 from pprint import pprint
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = oc.OmniCar()
@@ -23,7 +23,6 @@ logger.debug(f"Message from Arduino: {from_arduino}")
 W2W_DIST = 34  # separation between coaxial wheels (cm)
 SONAR_LIDAR_OFFSET = 15  # offset distance between sonar & lidar
 CARSPEED = 150  # default car speed
-RATE = 13.5  # cm/sec traveled by car @ CARSPEED = 150
 R = 50  # Distance margin for clearing obstructions
 EOW = 25  # Threshold End of Wall
 CLEARANCE = 40  # nominal wall clearance (cm)
@@ -31,9 +30,9 @@ FWD = 94   # forward drive direction (with 4 deg cross-track correction)
 LFT = 180  # left drive direction
 REV = 270  # reverse drive direction
 RGT = 0  # right drive direction
-KP = 0.2  # steering PID proportional coefficient
-KI = 0.15  # steering PID integral coefficient
-KD = 0.4  # steering PID derivative coefficient
+KP = 0.6  # steering PID proportional coefficient
+KI = 0.1  # steering PID integral coefficient
+KD = 1.5  # steering PID derivative coefficient
 PIDTRIM = 8  # default value for spin trim
 PIDWIN = 6  # number of values to use in rolling average
 
@@ -46,13 +45,14 @@ class PID():
         """ Instantiate PID object before entering loop.
 
         target is the target magnetic compass heading in degrees."""
+        """Turn (while stopped) toward target course (degrees)."""
+        target = normalize_angle(target)
         self.target = target
         self.prev_error = 0
         self.trimval = PIDTRIM
-        # create a rolling list of previous (rws) error values
+        # create a rolling list of previous error values
         self.initial = 1
-        self.rws = PIDWIN  # rolling window size
-        self.rwl = [self.initial] * self.rws  # rolling window list
+        self.rwl = [self.initial] * PIDWIN  # rolling window list
 
     def _get_integral_error(self, hdg_err):
         """Return rolling average error."""
@@ -62,8 +62,9 @@ class PID():
 
     def trim(self):
         """Return trim value to steer toward target."""
-        hdg = car.heading()
-        heading_error = hdg - self.target
+        # To avoid the complication of the 360 / 0 transition,
+        # convert problem to one of aiming for a target at 180 degrees.
+        heading_error = relative_bearing(self.target) - 180
         p_term = heading_error * KP
         i_term = self._get_integral_error(heading_error) * KI
         d_term = (heading_error - self.prev_error) * KD
@@ -74,7 +75,7 @@ class PID():
         istr = f"I-term: {i_term:.2f}\t"
         dstr = f"D-term: {d_term:.2f}\t"
         tstr = f"Trim: {self.trimval:.2f}\t"
-        hstr = f"HDG-Error: {int(hdg)-self.target}"
+        hstr = f"HDG-Error: {heading_error:.0f}"
         logger.debug(pstr + istr + dstr + tstr + hstr)
         return self.trimval
 
@@ -131,6 +132,12 @@ class DeltaT():
         return delt
 
 
+def get_rate(speed):
+    """Return rate (cm/sec) for driving FWD @ motor speed.
+
+    Determined empirically for speed values in range 150-250."""
+    return speed/8 - 5
+
 def pid_steer_test(n=50):
     """
     Test PID steering operation over n cycles through feedback loop. 
@@ -145,32 +152,36 @@ def pid_steer_test(n=50):
         n -= 1
     car.stop_wheels()
 
-def drive_ahead(dist):
+def drive_ahead(dist, spd=None):
     """drive dist and stop."""
-
+    if not spd:
+        spd = CARSPEED
     # instantiate PID steering
     target = int(car.heading())
     pid = PID(target)
 
     # drive
-    time_to_travel = dist / RATE
+    rate = get_rate(spd)  # cm/sec
+    time_to_travel = dist / rate
     start = time.time()
     delta_t = 0
     while delta_t < time_to_travel:
         delta_t = time.time() - start
-        _ = car.go(CARSPEED, FWD, spin=pid.trim())
+        _ = car.go(spd, FWD, spin=pid.trim())
     car.stop_wheels()
 
-def drive_ahead(dist):
+def drive_ahead2(dist, spd=None):
     """drive dist and stop. (no pid steering)"""
-
+    if not spd:
+        spd = CARSPEED
     # drive
-    time_to_travel = dist / RATE
+    rate = get_rate(spd)  # cm/sec
+    time_to_travel = dist / rate
     start = time.time()
     delta_t = 0
     while delta_t < time_to_travel:
         delta_t = time.time() - start
-        _ = car.go(CARSPEED, FWD, spin=PIDTRIM)
+        _ = car.go(spd, FWD, spin=PIDTRIM)
     car.stop_wheels()
 
 def normalize_angle(angle):
@@ -324,7 +335,8 @@ def approach_wall(ddir, carspeed, clearance, nmbr=1, mapping=True):
     if dist > clearance:
         # Calculate distance & time to reach target location
         dist_to_travel = dist - clearance
-        time_to_travel = dist_to_travel / RATE
+        rate = get_rate(spd)  # cm/sec
+        time_to_travel = dist_to_travel / rate
 
         # instantiate PID steering
         target = int(car.heading())
@@ -347,7 +359,8 @@ def approach_wall(ddir, carspeed, clearance, nmbr=1, mapping=True):
     elif dist < clearance:
         # Calculate distance & time to reach target location
         dist_to_travel = clearance - dist
-        time_to_travel = dist_to_travel / RATE
+        rate = get_rate(spd)  # cm/sec
+        time_to_travel = dist_to_travel / rate
 
         # back away from wall
         start = time.time()
@@ -646,9 +659,11 @@ def drive_to_open_sector(nmbr):
             drive_ahead(r)
         else:
             break
-def drive_to_spot():
+def drive_to_spot(spd=None):
     """Scan, ask for spot to drive to & display interactive map
-    User then inpts coordinates of destination. Repeat."""
+    User then inputs coordinates of destination. Repeat."""
+    if not spd:
+        spd = CARSPEED
     nmbr = 0
     while True:
         # scan & display plot
@@ -667,14 +682,14 @@ def drive_to_spot():
         target_angle = int(theta - 90)
         print(f"Turning {target_angle} degrees")
         turn_to(car.heading()-target_angle)
-        print(f"Driving {r} cm")
-        drive_ahead(r)
+        print(f"Driving {r:.1f} cm")
+        drive_ahead(r, spd=spd)
         nmbr += 1
         
 
 if __name__ == "__main__":
 
-    drive_to_spot()
+    drive_to_spot(200)
     #drive_to_open_sector(0)
     #follow_walls_left_lite(1)
     '''
