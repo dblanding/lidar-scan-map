@@ -674,18 +674,22 @@ def drive_to_open_sector(nmbr):
 def drive_to_spot(spd=None):
     """
     Scan & display interactive map.
-    User examines map to find x,y coords of spot to drive to.   
+    User examines map to find x,y coords of spot to drive to.
     User closes map and inputs coordinates.
     Car drives to spot selected. Repeat.
     """
     if not spd:
         spd = CARSPEED
-    nmbr = 0
+    nmbr = 100
     while True:
         # scan & display plot
         data = save_scan(nmbr)
         pscan = proscan.ProcessScan(data)
+        open_sctrs = pscan.open_sectors(100)
+        pprint(open_sctrs)
         pscan.map(seq_nmbr=nmbr, show=True)
+
+        # get coords from user
         coordstr = input("Enter x, y coords of target, q to quit: ")
         if ',' in coordstr:
             xstr, ystr = coordstr.split(',')
@@ -694,6 +698,8 @@ def drive_to_spot(spd=None):
             coords = (x, y)
         else:
             break
+
+        # convert x,y to r, theta then drive
         r, theta = geo.r2p(coords)
         target_angle = int(theta - 90)
         print(f"Turning {target_angle} degrees")
