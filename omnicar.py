@@ -194,7 +194,7 @@ class OmniCar():
         u, v = geo.p2r(speed, angle - 45)
 
         # motor numbers
-        m1, m2, m3, m4 = (1, 2, 3, 4)
+        # m1, m2, m3, m4 = (1, 2, 3, 4)
 
         # combine motor speed with spin
         m1spd = int(spin + u)
@@ -287,11 +287,11 @@ class OmniCar():
 
     def scan_mtr_start(self, spd):
         """Turn scan motor on at speed = spd (int between 0-255)."""
-        sensor_data = self._xfer_data((2, 0, 0, 0, 0, spd))
+        _ = self._xfer_data((2, 0, 0, 0, 0, spd))
 
     def scan_mtr_stop(self):
         """Turn scan motor off."""
-        sensor_data = self._xfer_data((2, 0, 0, 0, 0, 0))
+        _ = self._xfer_data((2, 0, 0, 0, 0, 0))
 
     def scan(self, spd=150, lev=LEV, hev=HEV):
         """
@@ -313,13 +313,13 @@ class OmniCar():
         enc_val = self.get_enc_val()
         # If scan rotor isn't near BDC (back dead cntr), go to BDC
         if enc_val > 3000:
-            _ = self.scan_mtr_start(spd)
+            self.scan_mtr_start(spd)
             while enc_val < 32767:  # continue as values increase to max
                 enc_val = self.get_enc_val()
             while enc_val == 32767:  # continue to back dead cntr
                 enc_val = self.get_enc_val()
         else:
-            _ = self.scan_mtr_start(spd)
+            self.scan_mtr_start(spd)
             enc_val = self.get_enc_val()
         last_time = time.time()
         data = []
@@ -341,7 +341,7 @@ class OmniCar():
                 y = self.distance * math.sin(theta)
                 dpd['xy'] = (x, y)
                 data.append(dpd)
-        _ = self.scan_mtr_stop()
+        self.scan_mtr_stop()
         self.points = data
 
     def map(self, map_folder="Maps", seq_nmbr=None, show=False):
@@ -443,7 +443,7 @@ class OmniCar():
             angle0, angle1 = sector
             if (angle0 - angle1) > 12:
                 target_angle = (angle0 + angle1)/2
-                target_coords = geo.p2r(radius/2, target_angle)
+                target_coords = geo.p2r(radius*.7, target_angle)
                 self.target = target_coords
                 break
 
@@ -532,7 +532,7 @@ def drive_ahead(dist, spd=None):
     delta_t = 0
     while delta_t < time_to_travel:
         delta_t = time.time() - start
-        sonardist, *rest = car.go(spd, FWD, spin=pid.trim())
+        sonardist, *_ = car.go(spd, FWD, spin=pid.trim())
         if sonardist < SONAR_STOP:
             print("Bumped into an obstacle!")
             car.stop_wheels()
@@ -604,13 +604,15 @@ def drive_to_spot(spd=None):
     """
     if not spd:
         spd = CARSPEED
-    nmbr = 100
-    while True:
+    nmbr = 0
+    while nmbr < 10:
         # scan & display plot
         car.scan()
         car.auto_detect_open_sector()
+        coords = car.target
+        '''
         car.map(seq_nmbr=nmbr, show=True)
-
+        
         # get coords from user
         msg = "enter Y to go to yellow dot; C to enter coords; Q to quit: "
         char = input(msg)
@@ -625,7 +627,7 @@ def drive_to_spot(spd=None):
                 coords = (x, y)
         else:
             break
-
+        '''
         # convert x,y to r, theta then drive
         r, theta = geo.r2p(coords)
         target_angle = int(theta - 90)
