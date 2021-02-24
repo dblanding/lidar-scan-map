@@ -25,7 +25,7 @@ import geom_utils as geo
 style.use('fivethirtyeight')
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 CARSPEED = 200  # default car speed
@@ -37,7 +37,7 @@ RGT = 0  # right drive direction
 KP = 0.6  # steering PID proportional coefficient
 KI = 0.1  # steering PID integral coefficient
 KD = 1.5  # steering PID derivative coefficient
-PIDTRIM = 8  # default value for spin trim
+PIDTRIM = 13  # default value for spin trim
 PIDWIN = 6  # number of values to use in rolling average
 LEV = 5000  # Low Encoder Value (45-deg behind car's -X direction)
 HEV = 30000  # High Encoder Value (car +X direction)
@@ -498,10 +498,12 @@ class PID():
 
 
 def get_rate(speed):
-    """Return rate (cm/sec) for driving FWD @ motor speed.
+    """Return rate (cm/sec) for driving FWD @ speed.
 
-    Determined empirically for speed values in range 150-250."""
-    return speed/8 - 5
+    Determined empirically for carspeed = 200, batt_charge >= 94%
+    and distances from 50 - 200 cm.
+    """
+    return speed*0.155 - 6.5
 
 def pid_steer_test(n=50):
     """
@@ -517,10 +519,8 @@ def pid_steer_test(n=50):
         n -= 1
     car.stop_wheels()
 
-def drive_ahead(dist, spd=None):
-    """Drive dist and stop."""
-    if not spd:
-        spd = CARSPEED
+def drive_ahead_w_compass_fb(dist, spd=CARSPEED):
+    """Drive dist and stop using compass feedback for steering trim."""
     # instantiate PID steering
     target = int(car.heading())
     pid = PID(target)
@@ -530,9 +530,33 @@ def drive_ahead(dist, spd=None):
     time_to_travel = dist / rate
     start = time.time()
     delta_t = 0
+    trimlist = []  # for debugging
     while delta_t < time_to_travel:
         delta_t = time.time() - start
-        sonardist, *_ = car.go(spd, FWD, spin=pid.trim())
+        trim = pid.trim()
+        trimlist.append(trim)  # for debugging
+        sonardist, *_ = car.go(spd, FWD, spin=trim)
+        if sonardist < SONAR_STOP:
+            print("Bumped into an obstacle!")
+            car.stop_wheels()
+            break
+    avg_trim = sum(trimlist) / len(trimlist)  # for debugging
+    logger.debug(f"Average trim = {avg_trim}")  # for debugging
+    logger.debug("trimlist:")  # for debugging
+    logger.debug(trimlist)  #for debugging
+    car.stop_wheels()
+
+def drive_ahead(dist, spd=CARSPEED):
+    """Drive dist and stop, w/out closed-loop steering feedback."""
+    # drive
+    rate = get_rate(spd)  # cm/sec
+    time_to_travel = dist / rate
+    start = time.time()
+    delta_t = 0
+    while delta_t < time_to_travel:
+        delta_t = time.time() - start
+        trim = PIDTRIM
+        sonardist, *_ = car.go(spd, FWD, spin=trim)
         if sonardist < SONAR_STOP:
             print("Bumped into an obstacle!")
             car.stop_wheels()
@@ -643,7 +667,8 @@ if __name__ == "__main__":
     time.sleep(0.5)
     from_arduino = car._read_serial_data()
     logger.debug(f"Message from Arduino: {from_arduino}")
-    drive_to_spot()
+    drive_ahead(200)
+    #drive_to_spot()
     '''
     while True:
         print("")
