@@ -20,6 +20,7 @@ import smbus
 import sys
 import time
 import Adafruit_ADS1x15
+from constants import *
 import geom_utils as geo
 
 style.use('fivethirtyeight')
@@ -27,22 +28,6 @@ style.use('fivethirtyeight')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
-
-CARSPEED = 200  # default car speed
-SONAR_STOP = 20  # threshold E-stop distance (cm) 
-FWD = 94   # forward drive direction (with 4 deg cross-track correction)
-LFT = 180  # left drive direction
-REV = 270  # reverse drive direction
-RGT = 0  # right drive direction
-KP = 0.6  # steering PID proportional coefficient
-KI = 0.1  # steering PID integral coefficient
-KD = 1.5  # steering PID derivative coefficient
-PIDTRIM = 13  # default value for spin trim
-PIDWIN = 6  # number of values to use in rolling average
-LEV = 5000  # Low Encoder Value (45-deg behind car's -X direction)
-HEV = 30000  # High Encoder Value (car +X direction)
-MEV = (HEV + LEV)//2  # Mid Encoder Value
-VLEG = 3  # optical path length of vetical leg (cm)
 
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain
@@ -343,6 +328,7 @@ class OmniCar():
                 data.append(dpd)
         self.scan_mtr_stop()
         self.points = data
+        return data
 
     def map(self, map_folder="Maps", seq_nmbr=None, show=False):
         """Plot all points and line segments and save in map_folder.
@@ -667,8 +653,12 @@ if __name__ == "__main__":
     time.sleep(0.5)
     from_arduino = car._read_serial_data()
     logger.debug(f"Message from Arduino: {from_arduino}")
-    drive_ahead(200)
-    #drive_to_spot()
+    print(car.heading())
+    #car.scan(spd=120)
+    #car.map(show=True)
+    #drive_ahead(100)
+    #turn_to(car.heading()-90)
+    #drive_to_spot(100)
     '''
     while True:
         print("")
