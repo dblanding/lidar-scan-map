@@ -1,21 +1,15 @@
 import logging
 import math
-import matplotlib.pyplot as plt
-from matplotlib import style
 import operator
 import sys
+from constants import LEV, HEV, VLEG
 import geom_utils as geo
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
-style.use('fivethirtyeight')
-
 # Default values used in ProcessScan
-LEV = 5000
-HEV = 30000
-VLEG = 3
 GAP = 10  # Threshold distance between adjacent points for continuity
 FIT = 4  # Threshold distance (point to line) for good fit
 
@@ -186,16 +180,6 @@ class ProcessScan():
                          if pnt.get("dist") <= mindist+1]
         return min_indx_list
 
-    def _find_p2p_angles_of_pnts(self, indx0, indx1):
-        """Tabulate point to point angle of a series of adjacent points."""
-        indexlist = [indx for indx in range(indx0, indx1)]
-        slopelist = []
-        for indx in indexlist:
-            slope = geo.p2p_angle(points[indx].get("xy"),
-                                  points[indx + 1].get("xy"))
-            slopelist.append(slope)
-        return zip(indexlist, slopelist)
-
     def _find_sum_of_sq_dist_to_line(self, line, indx0, indx1):
         """
         Return sum of squares of distances between line (a, b, c)
@@ -250,7 +234,6 @@ class ProcessScan():
         # build a list of index pairs representing segment end points
         all_segments = []
         for region in self.regions:
-            start_idx, end_idx = region
             corners = self._find_corners(region)
             segments = zip(corners, corners[1:])
             all_segments.extend(segments)
@@ -355,66 +338,6 @@ class ProcessScan():
         angle = geo.p2p_angle(start_coords, end_coords)
         dist = geo.p2line_dist((0, 0), line)  # perp distance to line
         return (coords, length, angle, dist)
-
-    def map(self, map_folder="Maps", seq_nmbr=None, show=False,
-            display_all_points=True):
-        """Plot all points and line segments and save in map_folder.
-
-        Optional args:
-        display_all_points=False to plot only points in regions
-        seq_nmbr appended to save_file_name
-        show=True to display an interactive plot (which blocks program).
-        """
-
-        filename = f"{map_folder}/scanMap"
-        if seq_nmbr:
-            str_seq_nmbr = str(seq_nmbr)
-            # prepend a '0' to single digit values (helps viewer sort) 
-            if len(str_seq_nmbr) == 1:
-                str_seq_nmbr = '0' + str_seq_nmbr
-            imagefile = filename + str_seq_nmbr + ".png"
-        else:
-            imagefile = filename + ".png"
-
-        # build data lists to plot data points
-        xs = []
-        ys = []
-        if display_all_points:
-            pnts_to_plot = self.points
-        else:
-            pnts_to_plot = [pnt for idx, pnt in enumerate(self.points)
-                            if idx in self._indexes_in_regions()]
-        for pnt in pnts_to_plot:
-            x, y = pnt.get("xy")
-            xs.append(x)
-            ys.append(y)
-        plt.scatter(xs, ys, color='#003F72')
-        title = f"({len(self.points)} pts) GAP={self.GAP}, FIT={self.FIT}"
-        plt.title(title)
-
-        # plot target point
-        if self.target:
-            x, y = self.target
-            tx = [x]
-            ty = [y]
-            plt.scatter(tx, ty, color='#FFA500')
-
-        # plot line segments
-        line_coords = []  # x, y coordinates
-        for segment in self.segments:
-            idx1, idx2 = segment
-            pnt1 = self.points[idx1].get("xy")
-            pnt2 = self.points[idx2].get("xy")
-            x_vals = [pnt1[0], pnt2[0]]
-            y_vals = [pnt1[1], pnt2[1]]
-            line_coords.append((pnt1, pnt2))
-            plt.plot(x_vals, y_vals)
-
-        plt.axis('equal')
-        plt.savefig(imagefile)
-        if show:
-            plt.show()  # shows interactive plot
-        plt.clf()  # clears previous points & lines
 
     def open_sectors(self, radius):
         """Return list of sectors containing no points at dist < radius

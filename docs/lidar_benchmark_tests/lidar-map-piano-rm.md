@@ -24,7 +24,7 @@ car.close()
 ```
 
 Several things can be noticed in the image:
-* The walls of the room are straight and square with the grid, indicating that the values of LEV, MEV and HEV are reasonably accurate. (If the values were sustantially off, the rectangular layout of the room would would appear to be rotated slightly from the grid.)
+* The walls of the room are straight and square with the grid, indicating that the values of LEV and HEV are reasonably accurate. (If the values were sustantially off, the rectangular layout of the room would would appear to be rotated slightly from the grid.)
 * The dimensions of the room are accurate.
 * The pedal lyre is big enough to be visiblle in the scan and it (obviously) occludes the wall of the room behind it.
 * The two legs under the keyboard however are not visible in the scan, but they still disrupt the wall behind them.

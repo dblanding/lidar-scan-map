@@ -20,5 +20,4 @@ PIDWIN = 6  # number of values to use in rolling average
 # Scan related parameters
 LEV = 5000  # Low Encoder Value (45-deg behind car's -X direction)
 HEV = 30000  # High Encoder Value (car +X direction)
-MEV = (HEV + LEV)//2  # Mid Encoder Value
 VLEG = 3  # optical path length of vetical leg (cm)

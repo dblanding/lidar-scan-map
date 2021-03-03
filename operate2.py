@@ -7,7 +7,7 @@ import pickle
 from pprint import pprint
 import sys
 import time
-from constants import *
+from constants import CARSPEED, FWD, SONAR_STOP, PIDTRIM
 import geom_utils as geo
 import mapper
 import omnicar as oc

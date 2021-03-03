@@ -18,15 +18,11 @@ import sys
 import time
 import Adafruit_ADS1x15
 import geom_utils as geo
+from constants import LEV, HEV, VLEG
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
-
-LEV = 5000  # Low Encoder Value (45-deg behind car's -X direction)
-HEV = 30000  # High Encoder Value (car +X direction)
-MEV = (HEV + LEV)//2  # Mid Encoder Value
-VLEG = 3  # optical path length of vetical leg (cm)
 
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain

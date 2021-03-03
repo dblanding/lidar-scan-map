@@ -73,9 +73,3 @@ def plot(scanpoints, map_lines=None, map_folder="Maps", seq_nmbr=None, show=True
     if show:
         plt.show()  # shows interactive plot
     plt.clf()  # clears previous points & lines
-
-
-if __name__ == "__main__":
-    filename = 'map.pkl'
-    segs = load_base_map(filename)
-    plot(segs)
