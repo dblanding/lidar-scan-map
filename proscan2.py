@@ -305,6 +305,14 @@ class ProcessScan():
         index_of_closest_region = minlist[0][-1]
         return index_of_closest_region
 
+    def get_points_in_region(self, regn_indx):
+        """Return list of xy coords of points in self.regions[regn_indx]
+        """
+        region = self.regions[regn_indx]
+        point_indexes = range(region[0], region[-1]+1)
+        return [self.points[indx].get('xy')
+                for indx in point_indexes]
+
     def regions_by_length(self):
         """
         Return list of region indexes sorted by length (longest first)
