@@ -1,5 +1,5 @@
-"""Collection of car operation commands
-"""
+"""Top level operating script for omniwheel vehicle."""
+
 import logging
 import math
 from pathlib import Path
@@ -14,7 +14,7 @@ import omnicar as oc
 import proscan2
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = oc.OmniCar()
@@ -47,14 +47,58 @@ def drive_ahead(dist, spd=CARSPEED):
             break
     car.stop_wheels()
 
-def T_xform(pntlist, tx, ty):
-    """Transform each point in pntlist by translation in x and y."""
+def normalize_angle(angle):
+    """Convert any value of angle to a value between 0-360."""
+    while angle < 0:
+        angle += 360
+    while angle > 360:
+        angle -= 360
+    return angle
 
-    return [(x+tx, y+ty)
-            for x, y in pntlist]
+def relative_bearing(target):
+    """Return 'relative' bearing of an 'absolute' target."""
+    delta = target - 180
+    #logger.debug(f"heading: {car.heading()}")
+    rel_brng = int(car.heading() - delta)
+    return normalize_angle(rel_brng)
+
+def turn_to(target):
+    """Turn (while stopped) to absolute target course (degrees)."""
+    target = normalize_angle(target)
+    # To avoid the complication of the 360 / 0 transition,
+    # convert problem to one of aiming for a target at 180 degrees.
+    heading_error = relative_bearing(target) - 180
+    logger.debug(f"relative heading: {heading_error} deg")
+    done = False
+    while not done:
+        while heading_error > 2:
+            spd = heading_error + 40
+            car.spin(spd)
+            heading_error = relative_bearing(target) - 180
+            logger.debug(f"relative heading: {heading_error} deg")
+            time.sleep(0.1)
+        car.stop_wheels()
+        while heading_error < -2:
+            spd = heading_error - 40
+            car.spin(spd)
+            heading_error = relative_bearing(target) - 180
+            logger.debug(f"heading error: {heading_error} deg")
+            time.sleep(0.1)
+        car.stop_wheels()
+        if -3 < abs(heading_error) < 3:
+            print("done")
+            done = True
 
 def R_xform(pntlist, angle):
-    """Transform each point in pntlist by rotation angle (degrees)."""
+    """Transform each point in pntlist by rotation angle (degrees)
+    w/r/t the coordinate system origin.
+
+    When applying both a rotation and translation transform, rotation
+    must be applied first, while the car's center is located at the
+    origin. This results in a pure rotation.
+    If the points were first transformed in translation, rotation
+    transformation would produce an unwanted motion through an arc.
+    """
 
     result = []
     for pnt in pntlist:
@@ -63,10 +107,46 @@ def R_xform(pntlist, angle):
         result.append(newpnt)
     return result
     
+def T_xform(pntlist, tx, ty):
+    """Transform each point in pntlist by translation in x and y."""
+
+    return [(x+tx, y+ty)
+            for x, y in pntlist]
+
+def xform_pnts(pntlist, ang, tx, ty):
+    """Return list of 2D transformed points, rotated & translated."""
+    rotated = R_xform(pntlist, ang)
+    translated = T_xform(rotated, tx, ty)
+    return translated
+    
+
 if __name__ == "__main__":
-    n = 1
+    n = 2
+    heading = car.heading()
+    home_angle = heading
+    curr_posn = (0, 0)
+    dist = 100  # dist to drive
     while n:
-        print(car.heading())
+        drive_ahead(dist)
+        time.sleep(1)
+        heading = car.heading()
+
+        # update current position by dead reckoning
+        r, theta = 100, (home_angle - heading + 90)
+        dx, dy = geo.p2r(r, theta)
+        x, y = curr_posn
+        curr_posn = x+dx, y+dy
+        print(f"Current position: {curr_posn}")
+        print(f"Heading = {heading} degrees before turn")
+        print(f"Command to turn to {heading-90}")
+        turn_target = heading - 90
+        turn_to(turn_target)
+        time.sleep(0.5)
+        turn_to(turn_target)
+        heading = car.heading()
+        print(f"Heading = {heading} degrees after turn")
+        ang = home_angle - heading
+        print(f"angle for transform = {ang}")
         data = car.scan(spd=120)
         pscan = proscan2.ProcessScan(data)
         longest_regions = pscan.regions_by_length()
@@ -75,21 +155,11 @@ if __name__ == "__main__":
             points_in_region = pscan.get_points_in_region(regn_indx)
             if len(points_in_region) > 15:
                 scanpoints.extend(points_in_region)
-        scanpoints_R = R_xform(scanpoints, 90)
-        scanpoints_T = T_xform(scanpoints_R, 0, 100)
-        '''
-        print(f"Length of segment = {pnts_in_seg} pnts")
-        coords1 = pscan.points[segment[0]].get("xy")
-        coords2 = pscan.points[segment[1]].get("xy")
-        print(f"Coords1: {coords1}")
-        print(f"Coords2: {coords2}")
-        line = geo.cnvrt_2pts_to_coef(coords1, coords2)
-        loc_xy = geo.proj_pt_on_line(line, (0,0))
-        loc_vctr = geo.r2p(loc_xy)
-        print(f"Location vector: {loc_vctr}")
-        '''
-        mapper.plot(scanpoints_T, mapper.load_base_map())
-        #drive_ahead(100)
+        transformed_pnts = xform_pnts(scanpoints, ang,
+                                      curr_posn[0],
+                                      curr_posn[1])
+        # Make overlay plot of most salient scan points on map
+        mapper.plot(transformed_pnts, mapper.load_base_map())
         n -= 1
     car.close()
 

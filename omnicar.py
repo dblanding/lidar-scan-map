@@ -11,8 +11,6 @@ See omni-wheels.md for an explanation of wheel motor drive.
 """
 import logging
 import math
-import matplotlib.pyplot as plt
-from matplotlib import style
 import os
 from pprint import pprint
 import serial
@@ -23,10 +21,8 @@ import Adafruit_ADS1x15
 from constants import *
 import geom_utils as geo
 
-style.use('fivethirtyeight')
-
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 adc = Adafruit_ADS1x15.ADS1115()
@@ -329,48 +325,6 @@ class OmniCar():
         self.scan_mtr_stop()
         self.points = data
         return data
-
-    def map(self, map_folder="Maps", seq_nmbr=None, show=False):
-        """Plot all points and line segments and save in map_folder.
-
-        Optional args:
-        seq_nmbr appended to save_file_name
-        show=True to display an interactive plot (which blocks program).
-        """
-
-        filename = f"{map_folder}/scanMap"
-        if seq_nmbr:
-            str_seq_nmbr = str(seq_nmbr)
-            # prepend a '0' to single digit values (helps viewer sort) 
-            if len(str_seq_nmbr) == 1:
-                str_seq_nmbr = '0' + str_seq_nmbr
-            imagefile = filename + str_seq_nmbr + ".png"
-        else:
-            imagefile = filename + ".png"
-
-        # build data lists to plot data points
-        xs = []
-        ys = []
-        for pnt in self.points:
-            x, y = pnt.get("xy")
-            xs.append(x)
-            ys.append(y)
-        plt.scatter(xs, ys, color='#003F72')
-        title = f"({len(self.points)} pts)"
-        plt.title(title)
-
-        # plot target point
-        if self.target:
-            x, y = self.target
-            tx = [x]
-            ty = [y]
-            plt.scatter(tx, ty, color='#FFA500')
-
-        plt.axis('equal')
-        plt.savefig(imagefile)
-        if show:
-            plt.show()  # shows interactive plot
-        plt.clf()  # clears previous points & lines
 
     def open_sectors(self, radius):
         """Return list of sectors containing no points at dist < radius

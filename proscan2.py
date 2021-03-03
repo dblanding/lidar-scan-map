@@ -29,9 +29,14 @@ def encoder_count_to_radians(enc_cnt):
 
 
 class ProcessScan():
-    """
-    Generate points and find set of best fit lines from scan data.
-    Plot points and/or lines. Generate plot image.
+    """Process scan data.
+
+    Find uninterrupted regions of closely spaced adjacent points
+    likely to represent continuous surfaces.
+    Find best fit straight lines within regions, likely to
+    represent straight sections of walls.
+    Find unobstructed directions likely to represent a clear path
+    for navigation.
     """
 
     def __init__(self, pointlist, lev=LEV, hev=HEV, gap=GAP, fit=FIT):
@@ -69,7 +74,7 @@ class ProcessScan():
         The result chosen is the one which finds the segment containing
         the greatest number of points, thus discouraaging the detection
         of 'false' corners in sections of wall that are really straight.
-        The list of indexes returned are sorted lowest first.
+        The list of indexes returned is sorted lowest index first.
 
         Background info:
         If the points in a continuous region are substantially straight &
@@ -111,8 +116,8 @@ class ProcessScan():
             return corners_fwd
 
     def _largest_diff(self, intgrlst):
-        """Given a list (length n) of integers, generate a list (length n-1)
-        of the differences between adjacent integers. 
+        """Given a list (length n) of integers, generate a list
+        (length n-1) of the differences between adjacent integers. 
         Return the value of the largest difference.
         """
         diffs = [abs(intgrlst[n] - intgrlst[n-1])
@@ -241,7 +246,7 @@ class ProcessScan():
 
     def _find_zero_regions(self):
         """
-        Find regions comprised of points whose distance values = 0
+        Find regions comprised of points whose distance values = -VLEG.
 
         Return list of indices of self.regions
         """
