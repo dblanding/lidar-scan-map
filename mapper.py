@@ -27,8 +27,9 @@ def load_base_map(filename=None):
 
     return coordlist
 
-def plot(scanpoints, map_lines=None, map_folder="Maps", seq_nmbr=None, show=True,
-        display_all_points=True):
+def plot(scanpoints, map_lines=None, carspot=None,
+         map_folder="Maps", seq_nmbr=None, show=True,
+         display_all_points=True):
     """Plot all points and line segments and save in map_folder.
 
     Optional args:
@@ -61,6 +62,12 @@ def plot(scanpoints, map_lines=None, map_folder="Maps", seq_nmbr=None, show=True
         ys.append(y)
     plt.scatter(xs, ys, color='#003F72')
 
+    # plot location of car on map
+    if carspot:
+        x, y = carspot
+        cx = [x]
+        cy = [y]
+        plt.scatter(cx, cy, color='#FF0000')
 
     # plot map
     for segment in map_lines:
@@ -69,6 +76,7 @@ def plot(scanpoints, map_lines=None, map_folder="Maps", seq_nmbr=None, show=True
         plt.plot(x_vals, y_vals, linewidth=1, color="k")
 
     plt.axis('equal')
+    plt.savefig(imagefile)
 
     if show:
         plt.show()  # shows interactive plot

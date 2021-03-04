@@ -119,47 +119,102 @@ def xform_pnts(pntlist, ang, tx, ty):
     translated = T_xform(rotated, tx, ty)
     return translated
     
+def show_scan_overlay(curr_posn, angle, nmbr):
+    print(f"Current position: {curr_posn}")
+    print(f"angle for transform = {angle} deg")
+    data = car.scan(spd=120)
+    pscan = proscan2.ProcessScan(data)
+    longest_regions = pscan.regions_by_length()
+    scanpoints = []  # xy coords of points in longest regions
+    for regn_indx in longest_regions:
+        points_in_region = pscan.get_points_in_region(regn_indx)
+        if len(points_in_region) > 15:
+            scanpoints.extend(points_in_region)
+    transformed_pnts = xform_pnts(scanpoints, angle,
+                                  curr_posn[0],
+                                  curr_posn[1])
+    # Make overlay plot of most salient scan points on map
+    mapper.plot(transformed_pnts,
+                mapper.load_base_map(),
+                carspot=curr_posn,
+                seq_nmbr=nmbr)
+
 
 if __name__ == "__main__":
-    n = 2
+    local_deviation = -4  # degrees
+    n = 1
     heading = car.heading()
+    print(f"Initial Heading = {heading} deg")
     home_angle = heading
     curr_posn = (0, 0)
-    dist = 100  # dist to drive
-    while n:
-        drive_ahead(dist)
-        time.sleep(1)
-        heading = car.heading()
+    angle = home_angle - heading
+    show_scan_overlay(curr_posn, angle, nmbr=n)
 
-        # update current position by dead reckoning
-        r, theta = 100, (home_angle - heading + 90)
-        dx, dy = geo.p2r(r, theta)
-        x, y = curr_posn
-        curr_posn = x+dx, y+dy
-        print(f"Current position: {curr_posn}")
-        print(f"Heading = {heading} degrees before turn")
-        print(f"Command to turn to {heading-90}")
-        turn_target = heading - 90
-        turn_to(turn_target)
-        time.sleep(0.5)
-        turn_to(turn_target)
-        heading = car.heading()
-        print(f"Heading = {heading} degrees after turn")
-        ang = home_angle - heading
-        print(f"angle for transform = {ang}")
-        data = car.scan(spd=120)
-        pscan = proscan2.ProcessScan(data)
-        longest_regions = pscan.regions_by_length()
-        scanpoints = []  # xy coords of points in longest regions
-        for regn_indx in longest_regions:
-            points_in_region = pscan.get_points_in_region(regn_indx)
-            if len(points_in_region) > 15:
-                scanpoints.extend(points_in_region)
-        transformed_pnts = xform_pnts(scanpoints, ang,
-                                      curr_posn[0],
-                                      curr_posn[1])
-        # Make overlay plot of most salient scan points on map
-        mapper.plot(transformed_pnts, mapper.load_base_map())
-        n -= 1
+    # Drive ahead
+    dist = 100  # dist to drive
+    print()
+    print(f"Driving ahead {dist} cm")
+    drive_ahead(dist)
+    time.sleep(1)
+
+    # update current estimated position by dead reckoning
+    r, theta = dist, (home_angle - heading + 90)
+    dx, dy = geo.p2r(r, theta)
+    x, y = curr_posn
+    curr_posn = x+dx, y+dy
+    heading = car.heading()
+    print(f"Heading = {heading} deg")
+    angle = home_angle - heading
+    n += 1
+    show_scan_overlay(curr_posn, angle, nmbr=n)
+
+    # turn left 90 deg
+    turn_target = home_angle - 90
+    print()
+    print(f"Command: Turn left to {turn_target}")
+    turn_to(turn_target)
+    time.sleep(0.5)
+    turn_to(turn_target)
+    heading = car.heading()
+    print(f"Heading = {heading} deg after turn")
+    angle = home_angle - heading
+    n += 1
+    show_scan_overlay(curr_posn, angle, nmbr=n)
+
+    # Drive ahead
+    dist = 140  # dist to drive
+    print()
+    print(f"Driving ahead {dist} cm")
+    drive_ahead(dist)
+    time.sleep(1)
+
+    # update current estimated position by dead reckoning
+    r, theta = dist, (home_angle - heading + 90)
+    dx, dy = geo.p2r(r, theta)
+    x, y = curr_posn
+    curr_posn = x+dx, y+dy
+    heading = car.heading()
+    print(f"Heading = {heading} deg")
+    angle = home_angle - heading + local_deviation
+    print(f"Computed angle for scan = {angle} deg")
+    angle = int(input("Enter measured angle of car: "))
+    n += 1
+    show_scan_overlay(curr_posn, angle, nmbr=n)
+    
+    # turn right 90 deg
+    turn_target = home_angle + local_deviation
+    print()
+    print(f"Command: Turn right to {turn_target}")
+    turn_to(turn_target)
+    time.sleep(0.5)
+    turn_to(turn_target)
+    heading = car.heading()
+    print(f"Heading = {heading} deg after turn")
+    angle = home_angle - heading + local_deviation
+    print(f"Computed angle for scan = {angle} deg")
+    angle = int(input("Enter measured angle of car: "))
+    n += 1
+    show_scan_overlay(curr_posn, angle, nmbr=n)
+
     car.close()
 

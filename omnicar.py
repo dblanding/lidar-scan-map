@@ -607,18 +607,11 @@ if __name__ == "__main__":
     time.sleep(0.5)
     from_arduino = car._read_serial_data()
     logger.debug(f"Message from Arduino: {from_arduino}")
-    print(car.heading())
-    #car.scan(spd=120)
-    #car.map(show=True)
-    #drive_ahead(100)
-    #turn_to(car.heading()-90)
-    #drive_to_spot(100)
-    '''
     while True:
         print("")
         print(f"Heading = {car.heading()}")
-        car.read_dist()
-        print(f"Distance = {car.distance}")
-        print(f"Enc Val = {car.get_enc_val()}")
+        #car.read_dist()
+        #print(f"Distance = {car.distance}")
+        #print(f"Enc Val = {car.get_enc_val()}")
         time.sleep(2)
-    '''
+
