@@ -17,7 +17,11 @@ import serial
 import smbus
 import sys
 import time
+import board
+import busio
+import adafruit_mpu6050
 import Adafruit_ADS1x15
+from adafruit_bno08x_rvc import BNO08x_RVC
 from constants import *
 import geom_utils as geo
 
@@ -25,8 +29,17 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
+# 16 bit analog to digital converter (for encoder values)
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain
+
+# MPU6050 Inertial Measurement Unit (for z-axis gyro data)
+i2c = busio.I2C(board.SCL, board.SDA)
+mpu = adafruit_mpu6050.MPU6050(i2c, 0x69)
+
+# Adafruit BNO085 IMU
+uart = serial.Serial("/dev/serial0", 115200)
+rvc = BNO08x_RVC(uart)
 
 #  For bi-directional communication with Arduino
 ports = ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyS0']
@@ -99,7 +112,7 @@ class OmniCar():
             value = value - 65536
         return value
 
-    def heading(self):
+    def mag_heading(self):
         """Return magnetic compass heading of car (degrees)."""
 
         # Read raw value
@@ -125,6 +138,17 @@ class OmniCar():
             hdg += 360
 
         return hdg
+
+    def heading(self):
+        """Return heading (gyro yaw) measured by BNO085 IMU (degrees).
+
+        BNO085 sends data @ 100 reading/sec on uart in RVC mode.
+        yaw has a range of +/- 180˚ and is provided in 0.01˚ increments.
+        """
+
+        uart.reset_input_buffer()  # purge stale data
+        yaw, *_ = rvc.heading
+        return yaw
 
     def _read_serial_data(self):
         """Read and return one line from serial port"""
@@ -265,6 +289,10 @@ class OmniCar():
     def get_enc_val(self):
         """Return encoder value from LiDAR rotor angular encoder."""
         return adc.read_adc(0, gain=GAIN, data_rate=250)
+
+    def get_gyro_data(self):
+        """Return gyro data in radians/sec."""
+        return mpu.gyro
 
     def scan_mtr_start(self, spd):
         """Turn scan motor on at speed = spd (int between 0-255)."""
@@ -609,9 +637,7 @@ if __name__ == "__main__":
     logger.debug(f"Message from Arduino: {from_arduino}")
     while True:
         print("")
-        print(f"Heading = {car.heading()}")
-        #car.read_dist()
-        #print(f"Distance = {car.distance}")
-        #print(f"Enc Val = {car.get_enc_val()}")
-        time.sleep(2)
+        print(f"Magnetic Heading = {car.mag_heading()}")
+        print(f"BNO085 Gyro Heading = {car.heading()}")
+        time.sleep(1)
 
