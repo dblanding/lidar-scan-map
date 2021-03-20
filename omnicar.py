@@ -1,10 +1,10 @@
 """This program accesses all the motors & sensors of the omni wheel car.
 
-RasPi's only serial port used for bi-directional communication w/ Arduino.
+RasPi's USB serial port used for bi-directional communication w/ Arduino.
  * All 5 motors are driven through 2 Adafruit Arduino motor shields.
  * HC-S04 sonar sensors are attached to the Arduino.
  * scan rotor angle encoder data via ADC on RasPi I2C bus
- * HMC5883L compass on RasPi I2C bus
+ * BNO085 IMU on RasPi UART RX pin
  * TFminiPlus lidar data attached to FT232 USB serial device 
 
 See omni-wheels.md for an explanation of wheel motor drive.
@@ -17,9 +17,6 @@ import serial
 import smbus
 import sys
 import time
-import board
-import busio
-import adafruit_mpu6050
 import Adafruit_ADS1x15
 from adafruit_bno08x_rvc import BNO08x_RVC
 from constants import *
@@ -28,14 +25,6 @@ import geom_utils as geo
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
-
-# 16 bit analog to digital converter (for encoder values)
-adc = Adafruit_ADS1x15.ADS1115()
-GAIN = 1  #ADC gain
-
-# MPU6050 Inertial Measurement Unit (for z-axis gyro data)
-i2c = busio.I2C(board.SCL, board.SDA)
-mpu = adafruit_mpu6050.MPU6050(i2c, 0x69)
 
 # Adafruit BNO085 IMU
 uart = serial.Serial("/dev/serial0", 115200)
@@ -63,15 +52,10 @@ for usbport in usbports:
         usbport = None
 logger.info(f"USB_Serial port = {usbport}")
 
+# 16 bit analog to digital converter (for encoder values)
 i2cbus = smbus.SMBus(1)
-HMC5883_ADDRESS = 0x1e   # 0x3c >> 1
-# HMC5883L Registers and their Address
-REGISTER_A = 0x00  # Address of Configuration register A
-REGISTER_B = 0x01  # Address of configuration register B
-REGISTER_MODE = 0x02  # Address of mode register
-X_AXIS_H = 0x03  # Address of X-axis MSB data register
-Z_AXIS_H = 0x05  # Address of Z-axis MSB data register
-Y_AXIS_H = 0x07  # Address of Y-axis MSB data register
+adc = Adafruit_ADS1x15.ADS1115()
+GAIN = 1  #ADC gain
 
 
 class OmniCar():
@@ -80,65 +64,10 @@ class OmniCar():
     def __init__(self):
         """Configure HMC5883L (compass) & store most recent lidar value."""
 
-        # write to Configuration Register A
-        # average 8 samples per measurement output
-        i2cbus.write_byte_data(HMC5883_ADDRESS, REGISTER_A, 0x70)
-
-        # Write to Configuration Register B for gain
-        # Use default gain
-        i2cbus.write_byte_data(HMC5883_ADDRESS, REGISTER_B, 0x20)
-
-        # Write to mode Register to specify mode
-        # 0x01 (single measurement mode) is default
-        # 0x00 (continuous measurenent mode)
-        i2cbus.write_byte_data(HMC5883_ADDRESS, REGISTER_MODE, 0x00)
-
         self.distance = 0  # last measured distance (cm) from lidar
         self.points = None  # scan data (list of dictionaries)
         self.target = None  # x, y coords of target point to drive to
         
-    def _read_raw_data(self, addr):
-        """Read raw data from HMC5883L data registers."""
-
-        # Read raw 16-bit value
-        high = i2cbus.read_byte_data(HMC5883_ADDRESS, addr)
-        low = i2cbus.read_byte_data(HMC5883_ADDRESS, addr+1)
-
-        # concatenate higher and lower value
-        value = ((high << 8) | low)
-
-        # get signed value from module
-        if value > 32768:
-            value = value - 65536
-        return value
-
-    def mag_heading(self):
-        """Return magnetic compass heading of car (degrees)."""
-
-        # Read raw value
-        x = self._read_raw_data(X_AXIS_H)
-        z = self._read_raw_data(Z_AXIS_H)
-        y = self._read_raw_data(Y_AXIS_H)
-        # print(x, y, z)
-        # working in radians...
-        heading = math.atan2(y, x)
-
-        # convert angle into degrees
-        hdg = int(heading * 180 / math.pi)
-
-        # calibration worked out experimentally (in degrees)
-        C1 = 30
-        C2 = 164
-        C3 = 93
-        cos_term = C1 * math.cos((hdg*math.pi/180) - C2*math.pi/180)
-        hdg = int(hdg - cos_term - C3)
-
-        # check for sign
-        if hdg < 0:
-            hdg += 360
-
-        return hdg
-
     def heading(self):
         """Return heading (gyro yaw) measured by BNO085 IMU (degrees).
 
@@ -290,10 +219,6 @@ class OmniCar():
         """Return encoder value from LiDAR rotor angular encoder."""
         return adc.read_adc(0, gain=GAIN, data_rate=250)
 
-    def get_gyro_data(self):
-        """Return gyro data in radians/sec."""
-        return mpu.gyro
-
     def scan_mtr_start(self, spd):
         """Turn scan motor on at speed = spd (int between 0-255)."""
         _ = self._xfer_data((2, 0, 0, 0, 0, spd))
@@ -421,50 +346,6 @@ class OmniCar():
         i2cbus.close()
 
 
-class PID():
-    """
-    Closed loop compass feedback used to adjust steering trim underway.
-    """
-
-    def __init__(self, target):
-        """ Instantiate PID object before entering loop.
-
-        target is the target magnetic compass heading in degrees."""
-        """Turn (while stopped) toward target course (degrees)."""
-        target = normalize_angle(target)
-        self.target = target
-        self.prev_error = 0
-        self.trimval = PIDTRIM
-        # create a rolling list of previous error values
-        self.initial = 1
-        self.rwl = [self.initial] * PIDWIN  # rolling window list
-
-    def _get_integral_error(self, hdg_err):
-        """Return rolling average error."""
-        self.rwl.insert(0, hdg_err)
-        self.rwl.pop()
-        return sum(self.rwl) / len(self.rwl)
-
-    def trim(self):
-        """Return trim value to steer toward target."""
-        # To avoid the complication of the 360 / 0 transition,
-        # convert problem to one of aiming for a target at 180 degrees.
-        heading_error = relative_bearing(self.target) - 180
-        p_term = heading_error * KP
-        i_term = self._get_integral_error(heading_error) * KI
-        d_term = (heading_error - self.prev_error) * KD
-        self.prev_error = heading_error
-        adjustment = int((p_term + i_term + d_term))
-        self.trimval += adjustment
-        pstr = f"P: {p_term:.2f}\t"
-        istr = f"I: {i_term:.2f}\t"
-        dstr = f"D: {d_term:.2f}\t"
-        tstr = f"Trim: {self.trimval:.2f}\t"
-        hstr = f"HDG-Error: {heading_error:.0f}"
-        logger.debug(pstr + istr + dstr + tstr + hstr)
-        return self.trimval
-
-
 def get_rate(speed):
     """Return rate (cm/sec) for driving FWD @ speed.
 
@@ -472,47 +353,6 @@ def get_rate(speed):
     and distances from 50 - 200 cm.
     """
     return speed*0.155 - 6.5
-
-def pid_steer_test(n=50):
-    """
-    Test PID steering operation over n cycles through feedback loop. 
-
-    Set logging level to DEBUG to see PID values printed out.
-    Allow space for car to drive FWD a few feet.
-    """
-    hdg = car.heading()
-    pid = PID(hdg)
-    while n:
-        car.go(CARSPEED, FWD, spin=pid.trim())
-        n -= 1
-    car.stop_wheels()
-
-def drive_ahead_w_compass_fb(dist, spd=CARSPEED):
-    """Drive dist and stop using compass feedback for steering trim."""
-    # instantiate PID steering
-    target = int(car.heading())
-    pid = PID(target)
-
-    # drive
-    rate = get_rate(spd)  # cm/sec
-    time_to_travel = dist / rate
-    start = time.time()
-    delta_t = 0
-    trimlist = []  # for debugging
-    while delta_t < time_to_travel:
-        delta_t = time.time() - start
-        trim = pid.trim()
-        trimlist.append(trim)  # for debugging
-        sonardist, *_ = car.go(spd, FWD, spin=trim)
-        if sonardist < SONAR_STOP:
-            print("Bumped into an obstacle!")
-            car.stop_wheels()
-            break
-    avg_trim = sum(trimlist) / len(trimlist)  # for debugging
-    logger.debug(f"Average trim = {avg_trim}")  # for debugging
-    logger.debug("trimlist:")  # for debugging
-    logger.debug(trimlist)  #for debugging
-    car.stop_wheels()
 
 def drive_ahead(dist, spd=CARSPEED):
     """Drive dist and stop, w/out closed-loop steering feedback."""
@@ -530,48 +370,6 @@ def drive_ahead(dist, spd=CARSPEED):
             car.stop_wheels()
             break
     car.stop_wheels()
-
-def normalize_angle(angle):
-    """Convert any value of angle to a value between 0-360."""
-    while angle < 0:
-        angle += 360
-    while angle > 360:
-        angle -= 360
-    return angle
-
-def relative_bearing(target):
-    """Return 'relative' bearing of an 'absolute' target."""
-    delta = target - 180
-    #logger.debug(f"heading: {car.heading()}")
-    rel_brng = int(car.heading() - delta)
-    return normalize_angle(rel_brng)
-
-def turn_to(target):
-    """Turn (while stopped) to absolute target course (degrees)."""
-    target = normalize_angle(target)
-    # To avoid the complication of the 360 / 0 transition,
-    # convert problem to one of aiming for a target at 180 degrees.
-    heading_error = relative_bearing(target) - 180
-    logger.debug(f"relative heading: {heading_error} deg")
-    done = False
-    while not done:
-        while heading_error > 2:
-            spd = heading_error + 40
-            car.spin(spd)
-            heading_error = relative_bearing(target) - 180
-            logger.debug(f"relative heading: {heading_error} deg")
-            time.sleep(0.1)
-        car.stop_wheels()
-        while heading_error < -2:
-            spd = heading_error - 40
-            car.spin(spd)
-            heading_error = relative_bearing(target) - 180
-            logger.debug(f"heading error: {heading_error} deg")
-            time.sleep(0.1)
-        car.stop_wheels()
-        if -3 < abs(heading_error) < 3:
-            print("done")
-            done = True
 
 def encoder_count_to_radians(enc_cnt):
     """
@@ -637,7 +435,6 @@ if __name__ == "__main__":
     logger.debug(f"Message from Arduino: {from_arduino}")
     while True:
         print("")
-        print(f"Magnetic Heading = {car.mag_heading()}")
         print(f"BNO085 Gyro Heading = {car.heading()}")
         time.sleep(1)
 

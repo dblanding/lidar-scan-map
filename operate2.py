@@ -14,7 +14,7 @@ import omnicar as oc
 import proscan2
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = oc.OmniCar()
@@ -48,44 +48,51 @@ def drive_ahead(dist, spd=CARSPEED):
     car.stop_wheels()
 
 def normalize_angle(angle):
-    """Convert any value of angle to a value between 0-360."""
-    while angle < 0:
+    """Convert any value of angle to a value between -180 and +180."""
+    while angle < -180:
         angle += 360
-    while angle > 360:
+    while angle > 180:
         angle -= 360
     return angle
 
 def relative_bearing(target):
-    """Return 'relative' bearing of an 'absolute' target."""
-    delta = target - 180
-    #logger.debug(f"heading: {car.heading()}")
-    rel_brng = int(car.heading() - delta)
+    """Return relative bearing of an absolute target.
+
+    If a target is straight ahead of the car, its relative bearing is
+    zero. Targets to the left of straight ahead have a (+) relative
+    bearing; targets to the right have (-) relative bearings.
+    If, for example, the car is on a heading of 0 degrees and intends
+    to turn left to a target heading of -90 degrees, the relative
+    bearing of the target is +90 degrees.
+    This is consistent with the standard mathematics convention of
+    measuring angles in the CCW direction as positive (+).
+    """
+    rel_brng = int(car.heading() - target)
     return normalize_angle(rel_brng)
 
-def turn_to(target):
-    """Turn (while stopped) to absolute target course (degrees)."""
-    target = normalize_angle(target)
-    # To avoid the complication of the 360 / 0 transition,
-    # convert problem to one of aiming for a target at 180 degrees.
-    heading_error = relative_bearing(target) - 180
+def turn_to_abs(target_angle):
+    """Turn (while stopped) to absolute target angle (degrees)."""
+    target = normalize_angle(target_angle)
+    logger.debug(f"Normalized angle: {target} deg")
+    # To avoid the complication of the -180 / +180 transition,
+    # convert problem to one of aiming for a target at 0 degrees.
+    heading_error = relative_bearing(target)
     logger.debug(f"relative heading: {heading_error} deg")
     done = False
     while not done:
         while heading_error > 2:
             spd = heading_error + 40
             car.spin(spd)
-            heading_error = relative_bearing(target) - 180
+            heading_error = relative_bearing(target)
             logger.debug(f"relative heading: {heading_error} deg")
-            time.sleep(0.1)
         car.stop_wheels()
         while heading_error < -2:
             spd = heading_error - 40
             car.spin(spd)
-            heading_error = relative_bearing(target) - 180
+            heading_error = relative_bearing(target)
             logger.debug(f"heading error: {heading_error} deg")
-            time.sleep(0.1)
         car.stop_wheels()
-        if -3 < abs(heading_error) < 3:
+        if -2 <= abs(heading_error) <= 2:
             print("done")
             done = True
 
@@ -141,7 +148,12 @@ def show_scan_overlay(curr_posn, angle, nmbr):
 
 
 if __name__ == "__main__":
-    local_deviation = -4  # degrees
+    m = 0
+    for turn in range(4):
+        m += 90
+        turn_to_abs(m)
+        time.sleep(2)
+    
     n = 1
     heading = car.heading()
     print(f"Initial Heading = {heading} deg")
@@ -172,9 +184,9 @@ if __name__ == "__main__":
     turn_target = home_angle - 90
     print()
     print(f"Command: Turn left to {turn_target}")
-    turn_to(turn_target)
+    turn_to_abs(turn_target)
     time.sleep(0.5)
-    turn_to(turn_target)
+    turn_to_abs(turn_target)
     heading = car.heading()
     print(f"Heading = {heading} deg after turn")
     angle = home_angle - heading
@@ -195,26 +207,23 @@ if __name__ == "__main__":
     curr_posn = x+dx, y+dy
     heading = car.heading()
     print(f"Heading = {heading} deg")
-    angle = home_angle - heading + local_deviation
+    angle = home_angle - heading
     print(f"Computed angle for scan = {angle} deg")
-    angle = int(input("Enter measured angle of car: "))
     n += 1
     show_scan_overlay(curr_posn, angle, nmbr=n)
     
     # turn right 90 deg
-    turn_target = home_angle + local_deviation
+    turn_target = home_angle
     print()
     print(f"Command: Turn right to {turn_target}")
-    turn_to(turn_target)
+    turn_to_abs(turn_target)
     time.sleep(0.5)
-    turn_to(turn_target)
+    turn_to_abs(turn_target)
     heading = car.heading()
     print(f"Heading = {heading} deg after turn")
-    angle = home_angle - heading + local_deviation
+    angle = home_angle - heading
     print(f"Computed angle for scan = {angle} deg")
-    angle = int(input("Enter measured angle of car: "))
     n += 1
     show_scan_overlay(curr_posn, angle, nmbr=n)
 
     car.close()
-
