@@ -148,6 +148,7 @@ def show_scan_overlay(curr_posn, angle, nmbr):
 
 
 if __name__ == "__main__":
+    car.reset_heading()
     m = 0
     for turn in range(4):
         m += 90

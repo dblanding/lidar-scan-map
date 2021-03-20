@@ -13,6 +13,7 @@ import logging
 import math
 import os
 from pprint import pprint
+import RPi.GPIO as GPIO
 import serial
 import smbus
 import sys
@@ -29,6 +30,10 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 # Adafruit BNO085 IMU
 uart = serial.Serial("/dev/serial0", 115200)
 rvc = BNO08x_RVC(uart)
+RESET_PIN = 18  # Broadcom pin 18 (Pi pin 12)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(RESET_PIN, GPIO.OUT)
+GPIO.output(RESET_PIN, GPIO.HIGH)
 
 #  For bi-directional communication with Arduino
 ports = ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyS0']
@@ -78,6 +83,12 @@ class OmniCar():
         uart.reset_input_buffer()  # purge stale data
         yaw, *_ = rvc.heading
         return yaw
+
+    def reset_heading(self):
+        """Reset heading to 0 degrees."""
+        GPIO.output(RESET_PIN, GPIO.LOW)
+        time.sleep(0.01)
+        GPIO.output(RESET_PIN, GPIO.HIGH)
 
     def _read_serial_data(self):
         """Read and return one line from serial port"""
@@ -344,6 +355,7 @@ class OmniCar():
         ser0.close()
         ser1.close()
         i2cbus.close()
+        GPIO.cleanup()
 
 
 def get_rate(speed):
@@ -433,8 +445,13 @@ if __name__ == "__main__":
     time.sleep(0.5)
     from_arduino = car._read_serial_data()
     logger.debug(f"Message from Arduino: {from_arduino}")
-    while True:
+    for _ in range(5):
         print("")
         print(f"BNO085 Gyro Heading = {car.heading()}")
         time.sleep(1)
-
+    car.reset_heading()
+    for _ in range(5):
+        print("")
+        print(f"BNO085 Gyro Heading = {car.heading()}")
+        time.sleep(1)
+    GPIO.cleanup()
