@@ -113,7 +113,7 @@ def R_xform(pntlist, angle):
         newpnt = geo.p2r(r, theta+angle)
         result.append(newpnt)
     return result
-    
+
 def T_xform(pntlist, tx, ty):
     """Transform each point in pntlist by translation in x and y."""
 
@@ -125,7 +125,7 @@ def xform_pnts(pntlist, ang, tx, ty):
     rotated = R_xform(pntlist, ang)
     translated = T_xform(rotated, tx, ty)
     return translated
-    
+
 def show_scan_overlay(curr_posn, angle, nmbr):
     print(f"Current position: {curr_posn}")
     print(f"angle for transform = {angle} deg")
@@ -146,7 +146,6 @@ def show_scan_overlay(curr_posn, angle, nmbr):
                 carspot=curr_posn,
                 seq_nmbr=nmbr)
 
-
 if __name__ == "__main__":
     car.reset_heading()
     m = 0
@@ -154,7 +153,7 @@ if __name__ == "__main__":
         m += 90
         turn_to_abs(m)
         time.sleep(2)
-    
+
     n = 1
     heading = car.heading()
     print(f"Initial Heading = {heading} deg")
@@ -212,7 +211,7 @@ if __name__ == "__main__":
     print(f"Computed angle for scan = {angle} deg")
     n += 1
     show_scan_overlay(curr_posn, angle, nmbr=n)
-    
+
     # turn right 90 deg
     turn_target = home_angle
     print()

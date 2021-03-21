@@ -1,11 +1,11 @@
 """This program accesses all the motors & sensors of the omni wheel car.
 
 RasPi's USB serial port used for bi-directional communication w/ Arduino.
- * All 5 motors are driven through 2 Adafruit Arduino motor shields.
- * HC-S04 sonar sensors are attached to the Arduino.
- * scan rotor angle encoder data via ADC on RasPi I2C bus
- * BNO085 IMU on RasPi UART RX pin
- * TFminiPlus lidar data attached to FT232 USB serial device 
+ * RasPi commands all motors, connected to Arduino's 2 motor shields.
+ * HC-S04 sonar sensors, attached to the Arduino, send data back to RasPi.
+BNO085 IMU attached on RasPi UART RX pin, sends heading data.
+TFminiPlus lidar data attached to FT232 USB serial device.
+Scan rotor angle encoder data via ADC on RasPi I2C bus.
 
 See omni-wheels.md for an explanation of wheel motor drive.
 """
@@ -64,7 +64,10 @@ GAIN = 1  #ADC gain
 
 
 class OmniCar():
-    """Control motors & access sensors of omni-wheel car."""
+    """Control motors & access sensors of omni-wheel car.
+
+    Also produce rotating scan with paired distance, angle values.
+    """
 
     def __init__(self):
         """Configure HMC5883L (compass) & store most recent lidar value."""
@@ -72,7 +75,7 @@ class OmniCar():
         self.distance = 0  # last measured distance (cm) from lidar
         self.points = None  # scan data (list of dictionaries)
         self.target = None  # x, y coords of target point to drive to
-        
+
     def heading(self):
         """Return heading (gyro yaw) measured by BNO085 IMU (degrees).
 
@@ -168,7 +171,7 @@ class OmniCar():
 
         distances = self._xfer_data((1, m1spd, m2spd, m3spd, m4spd, 0))
         return distances
-    
+
     def spin(self, spd):
         """Spin car (about its own axis) at spd (int) (CCW = +)
         Return distances: [front_dist, left_dist, right_dist]"""
@@ -414,7 +417,7 @@ def drive_to_spot(spd=None):
         coords = car.target
         '''
         car.map(seq_nmbr=nmbr, show=True)
-        
+
         # get coords from user
         msg = "enter Y to go to yellow dot; C to enter coords; Q to quit: "
         char = input(msg)
@@ -434,7 +437,7 @@ def drive_to_spot(spd=None):
         r, theta = geo.r2p(coords)
         target_angle = int(theta - 90)
         print(f"Turning {target_angle} degrees")
-        turn_to(car.heading()-target_angle)
+        turn_to_abs(car.heading()-target_angle)
         print(f"Driving {r:.1f} cm")
         drive_ahead(r, spd=spd)
         nmbr += 1
