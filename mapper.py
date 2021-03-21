@@ -27,7 +27,7 @@ def load_base_map(filename=None):
 
     return coordlist
 
-def plot(scanpoints, map_lines=None, carspot=None,
+def plot(scanpoints, map_lines=None, target=None, carspot=None,
          map_folder="Maps", seq_nmbr=None, show=True,
          display_all_points=True):
     """Plot all points and line segments and save in map_folder.
@@ -68,6 +68,13 @@ def plot(scanpoints, map_lines=None, carspot=None,
         cx = [x]
         cy = [y]
         plt.scatter(cx, cy, color='#FF0000')
+
+    # plot location of target on map
+    if target:
+        x, y = target
+        cx = [x]
+        cy = [y]
+        plt.scatter(cx, cy, color='#FFA500')
 
     # plot map
     for segment in map_lines:

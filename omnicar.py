@@ -330,8 +330,7 @@ class OmniCar():
         First find average dist value (not == -3).
         Then look for sectors at radius = 1.5 * average.
         Put target at mid-angle at radius/2.
-        Convert to (x, y) coords and save as self.target
-        so that map can access it.
+        Convert to (x, y) coords and return it.
         """
         # Find average (non-zero) dist value
         rvals = [point.get('dist')
@@ -350,9 +349,9 @@ class OmniCar():
             angle0, angle1 = sector
             if (angle0 - angle1) > 12:
                 target_angle = (angle0 + angle1)/2
-                target_coords = geo.p2r(radius*.7, target_angle)
-                self.target = target_coords
+                target_pnt = geo.p2r(radius*.7, target_angle)
                 break
+        return target_pnt
 
     def close(self):
         ser0.close()
@@ -360,31 +359,6 @@ class OmniCar():
         i2cbus.close()
         GPIO.cleanup()
 
-
-def get_rate(speed):
-    """Return rate (cm/sec) for driving FWD @ speed.
-
-    Determined empirically for carspeed = 200, batt_charge >= 94%
-    and distances from 50 - 200 cm.
-    """
-    return speed*0.155 - 6.5
-
-def drive_ahead(dist, spd=CARSPEED):
-    """Drive dist and stop, w/out closed-loop steering feedback."""
-    # drive
-    rate = get_rate(spd)  # cm/sec
-    time_to_travel = dist / rate
-    start = time.time()
-    delta_t = 0
-    while delta_t < time_to_travel:
-        delta_t = time.time() - start
-        trim = PIDTRIM
-        sonardist, *_ = car.go(spd, FWD, spin=trim)
-        if sonardist < SONAR_STOP:
-            print("Bumped into an obstacle!")
-            car.stop_wheels()
-            break
-    car.stop_wheels()
 
 def encoder_count_to_radians(enc_cnt):
     """
@@ -400,49 +374,6 @@ def encoder_count_to_radians(enc_cnt):
     theta = (30000 - enc_cnt) * math.pi / (30000 - 10000)
     return theta
 
-def drive_to_spot(spd=None):
-    """
-    Scan & display interactive map with proposed target spot shown.
-    User then closes map and either enters 'y' to agree to proposed
-    spot or 'c' to input coordinates of an alternate one.
-    Car drives to spot. Repeat.
-    """
-    if not spd:
-        spd = CARSPEED
-    nmbr = 0
-    while nmbr < 10:
-        # scan & display plot
-        car.scan()
-        car.auto_detect_open_sector()
-        coords = car.target
-        '''
-        car.map(seq_nmbr=nmbr, show=True)
-
-        # get coords from user
-        msg = "enter Y to go to yellow dot; C to enter coords; Q to quit: "
-        char = input(msg)
-        if char in 'yY':
-            coords = car.target
-        elif char in 'cC':
-            coordstr = input("Enter x, y coords: ")
-            if ',' in coordstr:
-                xstr, ystr = coordstr.split(',')
-                x = int(xstr)
-                y = int(ystr)
-                coords = (x, y)
-        else:
-            break
-        '''
-        # convert x,y to r, theta then drive
-        r, theta = geo.r2p(coords)
-        target_angle = int(theta - 90)
-        print(f"Turning {target_angle} degrees")
-        turn_to_abs(car.heading()-target_angle)
-        print(f"Driving {r:.1f} cm")
-        drive_ahead(r, spd=spd)
-        nmbr += 1
-
-
 if __name__ == "__main__":
     car = OmniCar()
     time.sleep(0.5)
@@ -457,4 +388,4 @@ if __name__ == "__main__":
         print("")
         print(f"BNO085 Gyro Heading = {car.heading()}")
         time.sleep(1)
-    GPIO.cleanup()
+    car.close()
