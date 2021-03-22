@@ -133,19 +133,25 @@ class Trip():
         self.initial_heading = 0
         self.nmbr = 0  # leg number
         self.data = None  # Scan data
-        self.curr_posn = (0, 0)  # Current position of car
+        self.curr_posn = (0, 0)  # Current position of car (WCS)
         self.curr_heading = 0  # Current heading of car
         self.theta = 0  # Angle to next target (CCW from X axis)
         self.drive_angle = 0  # Angle to target CCW from Y axis
         self.drive_dist = 0  # Distance to target point
-        self.target_pnt = (0, 0)  # x, y coords of target point
+        self.target_pnt = (0, 0)  # target point (RCS)
+        self.transformed_target = (0, 0)  # target point (WCS)
 
     def complete_one_leg(self):
         """Auto sequence multiple legs of trip."""
         self.nmbr += 1
+        print(f"Leg {self.nmbr}")
         self.scan_plan()
         self.show_map()
+        char = input("Enter y to continue: ")
+        if char not in "yY":
+            return True
         self.drive()
+        return False
 
     def scan_plan(self):
         """Scan and compute target in open sector."""
@@ -156,18 +162,6 @@ class Trip():
         self.drive_angle = int(theta - 90)
         self.drive_dist = dist
         self.theta = theta
-
-    def drive(self):
-        """Drive to target, then update current position & heading."""
-        print(f"Turning {self.drive_angle} degrees (+) CCW")
-        turn_to_abs(car.heading() - self.drive_angle)
-        # Update curr_heading after turning
-        self.curr_heading = self.initial_heading - car.heading()
-        print(f"Driving {self.drive_dist:.1f} cm")
-        drive_ahead(self.drive_dist, spd=CARSPEED)
-        # Update curr_posn after driving to target_pnt
-        self.curr_posn = (self.curr_posn[0] + self.target_pnt[0],
-                          self.curr_posn[1] + self.target_pnt[1])
 
     def show_map(self):
         """Show (most salient) scan points overlayed on a map.
@@ -194,12 +188,26 @@ class Trip():
                     target=transformed_target,
                     carspot=self.curr_posn,
                     seq_nmbr=self.nmbr)
+        # Update curr_posn to transformed target_pnt
+        self.transformed_target = transformed_target
+
+    def drive(self):
+        """Drive to target, then update current position & heading."""
+        print(f"Turning {self.drive_angle} degrees (+) CCW")
+        turn_to_abs(car.heading() - self.drive_angle)
+        # Update curr_heading after turning
+        self.curr_heading = -car.heading()
+        print(f"Driving {self.drive_dist:.1f} cm")
+        drive_ahead(self.drive_dist, spd=CARSPEED)
+        # Updte curr_posn after drive
+        self.curr_posn = self.transformed_target
 
 
 if __name__ == "__main__":
     car.reset_heading()
     nmbr_of_legs = 2  # Number of legs of trip
     trip = Trip()
-    for _ in range(nmbr_of_legs):
-        trip.complete_one_leg()
+    done = False
+    while not done:
+        done = trip.complete_one_leg()
     car.close()
