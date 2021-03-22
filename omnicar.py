@@ -35,7 +35,7 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setup(RESET_PIN, GPIO.OUT)
 GPIO.output(RESET_PIN, GPIO.HIGH)
 
-#  For bi-directional communication with Arduino
+#  Bi-directional communication with Arduino
 ports = ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyS0']
 for port in ports:
     if os.path.exists(port):
@@ -46,7 +46,7 @@ for port in ports:
         port = None
 logger.info(f"Serial port = {port}")
 
-# For access to lidar distance sensor
+# Lidar distance sensor
 usbports = ['/dev/ttyUSB0', '/dev/ttyUSB1']
 for usbport in usbports:
     if os.path.exists(usbport):
@@ -57,7 +57,7 @@ for usbport in usbports:
         usbport = None
 logger.info(f"USB_Serial port = {usbport}")
 
-# 16 bit analog to digital converter (for encoder values)
+# 16 bit ADC (for encoder values)
 i2cbus = smbus.SMBus(1)
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain
@@ -71,7 +71,6 @@ class OmniCar():
 
     def __init__(self):
         """Configure HMC5883L (compass) & store most recent lidar value."""
-
         self.distance = 0  # last measured distance (cm) from lidar
         self.points = None  # scan data (list of dictionaries)
         self.target = None  # x, y coords of target point to drive to
@@ -82,7 +81,6 @@ class OmniCar():
         BNO085 sends data @ 100 reading/sec on uart in RVC mode.
         yaw has a range of +/- 180˚ and is provided in 0.01˚ increments.
         """
-
         uart.reset_input_buffer()  # purge stale data
         yaw, *_ = rvc.heading
         return yaw
@@ -104,12 +102,10 @@ class OmniCar():
 
     def _xfer_data(self, send_data):
         """Xfer data to Arduino: Send motor spd values, get sensor data
-
         send_data is a tuple of 6 integers: (flag, m1, m2, m3, m4, m5)
         flag = 0 (ignore motor values, just get sensor data)
         flag = 1 (apply motor values m1 thru m4 and get sensor data)
-        flag = 2 (apply motor value m5 and get sensor data)
-        """
+        flag = 2 (apply motor value m5 and get sensor data)"""
         # convert integers to strings for sending on serial
         send_data_str = (str(item) for item in send_data)
         logger.debug(f"Data to send: {send_data}")
