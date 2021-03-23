@@ -14,7 +14,7 @@ import omnicar as oc
 import proscan2
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = oc.OmniCar()
@@ -59,7 +59,7 @@ def relative_bearing(target):
 
     If a target is straight ahead of the car, its relative bearing is
     zero. Targets to the left of straight ahead have a (+) relative
-    bearing; targets to the right have (-) relative bearings.
+    bearing; targets to the right have a (-) relative bearing.
     If, for example, the car is on a heading of 0 degrees and intends
     to turn left to a target heading of -90 degrees, the relative
     bearing of the target is +90 degrees.
@@ -94,51 +94,45 @@ def turn_to_abs(target_angle):
             print("done")
             done = True
 
-def R_xform(pntlist, angle):
-    """Transform each point in pntlist by rotation angle (degrees)
-    w/r/t the coordinate system origin.
+def R_xform(pnt, angle):
+    """Transform point by rotation angle (degrees) CW about the origin."""
+    r, theta = geo.r2p(pnt)
+    newpnt = geo.p2r(r, theta + angle)
+    return newpnt
 
-    When applying both a rotation and translation transform, rotation
+def T_xform(pnt, tx, ty):
+    """Transform point by translation tx in x and ty in y."""
+    x, y = pnt
+    return (x+tx, y+ty)
+
+def xform_pnt(pnt, ang, tx, ty):
+    """Return 2D transformed point, rotated & translated.
+
+    When transforming in both rotation and translation, rotation
     must be applied first, while the car's center is located at the
     origin. This results in a pure rotation.
-    If the points were first transformed in translation, rotation
-    transformation would produce an unwanted motion through an arc.
-    """
-
-    result = []
-    for pnt in pntlist:
-        r, theta = geo.r2p(pnt)
-        newpnt = geo.p2r(r, theta+angle)
-        result.append(newpnt)
-    return result
-
-def T_xform(pntlist, tx, ty):
-    """Transform each point in pntlist by translation in x and y."""
-
-    return [(x+tx, y+ty)
-            for x, y in pntlist]
-
-def xform_pnts(pntlist, ang, tx, ty):
-    """Return list of 2D transformed points, rotated & translated."""
-    rotated = R_xform(pntlist, ang)
+    If a point were first transformed in translation, rotation
+    would then produce an unwanted motion through an arc."""
+    rotated = R_xform(pnt, ang)
     translated = T_xform(rotated, tx, ty)
     return translated
 
 
 class Trip():
-    """Scan, plan, map, drive multi-leg trip."""
+    """Scan, plan, map & drive multi-leg trip.
+    As car moves through its 'world', we need to transform 2D coords
+    between car coord sys (CCS) & world coord sys (WCS)."""
 
     def __init__(self):
         car.reset_heading()
-        self.initial_heading = 0
         self.nmbr = 0  # leg number
         self.data = None  # Scan data
-        self.curr_posn = (0, 0)  # Current position of car (WCS)
-        self.curr_heading = 0  # Current heading of car
+        self.posn = (0, 0)  # Position of car (in WCS)
+        self.heading = -car.heading()  # Current heading of car
         self.theta = 0  # Angle to next target (CCW from X axis)
         self.drive_angle = 0  # Angle to target CCW from Y axis
         self.drive_dist = 0  # Distance to target point
-        self.target_pnt = (0, 0)  # target point (RCS)
+        self.target_pnt = (0, 0)  # target point (CCS)
         self.transformed_target = (0, 0)  # target point (WCS)
 
     def complete_one_leg(self):
@@ -175,37 +169,40 @@ class Trip():
             if len(points_in_region) > 15:
                 scanpoints.extend(points_in_region)
         # Transform point coordinates from Car CS to Map CS
-        transformed_pnts = xform_pnts(scanpoints,
-                                      self.curr_heading,
-                                      self.curr_posn[0],
-                                      self.curr_posn[1])
-        transformed_target = xform_pnts([self.target_pnt],
-                                        self.curr_heading,
-                                        self.curr_posn[0],
-                                        self.curr_posn[1])[0]
+        transformed_pnts = [xform_pnt(point,
+                                      self.heading,
+                                      self.posn[0],
+                                      self.posn[1])
+                            for point in scanpoints]
+        transformed_target = xform_pnt(self.target_pnt,
+                                       self.heading,
+                                       self.posn[0],
+                                       self.posn[1])
         # Make overlay plot of points on map, then show & save map
         mapper.plot(transformed_pnts, mapper.load_base_map(),
                     target=transformed_target,
-                    carspot=self.curr_posn,
+                    carspot=self.posn,
                     seq_nmbr=self.nmbr)
-        # Update curr_posn to transformed target_pnt
+        # Save transformed target_pnt
         self.transformed_target = transformed_target
 
     def drive(self):
         """Drive to target, then update current position & heading."""
-        print(f"Turning {self.drive_angle} degrees (+) CCW")
+        if self.drive_angle < 0:
+            print(f"Turning Right {-self.drive_angle} degrees.")
+        else:
+            print(f"Turning Left {self.drive_angle} degrees.")
         turn_to_abs(car.heading() - self.drive_angle)
         # Update curr_heading after turning
-        self.curr_heading = -car.heading()
-        print(f"Driving {self.drive_dist:.1f} cm")
+        self.heading = -car.heading()
+        print(f"Driving {self.drive_dist:.1f}cm on heading {self.heading}deg")
         drive_ahead(self.drive_dist, spd=CARSPEED)
-        # Updte curr_posn after drive
-        self.curr_posn = self.transformed_target
+        # Updte posn after drive
+        self.posn = self.transformed_target
 
 
 if __name__ == "__main__":
     car.reset_heading()
-    nmbr_of_legs = 2  # Number of legs of trip
     trip = Trip()
     done = False
     while not done:

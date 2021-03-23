@@ -325,7 +325,7 @@ class OmniCar():
         """ Under development...
         First find average dist value (not == -3).
         Then look for sectors at radius = 1.5 * average.
-        Put target at mid-angle at radius/2.
+        Put target near mid-angle a little past radius/2.
         Convert to (x, y) coords and return it.
         """
         # Find average (non-zero) dist value
@@ -336,16 +336,16 @@ class OmniCar():
 
         # make radius somewhat larger
         radius = avgdist * 1.5
-        print(f"radius: {int(radius)}")
+        print(f"Sector detection radius: {int(radius)}")
         sectors = self.open_sectors(radius)
-        print(sectors)
+        print(f"Open sectors: {sectors}")
 
         # Find first sector of reaonable width
         for sector in sectors:
             angle0, angle1 = sector
             if (angle0 - angle1) > 12:
-                target_angle = (angle0 + angle1)/2
-                target_pnt = geo.p2r(radius*.7, target_angle)
+                target_angle = (angle0 + angle1) * 0.48
+                target_pnt = geo.p2r(radius*.8, target_angle)
                 break
         return target_pnt
 
