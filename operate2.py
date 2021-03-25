@@ -195,33 +195,28 @@ class Trip():
         drive_ahead(self.drive_dist, spd=CARSPEED)
         # Update values of self.posn and self.heading
         hdng_end = -car.heading()
-        avg_hdng = (hdng_strt + hdng_end) / 2
-        #self.posn = self.next_posn(avg_hdng)
-        self.posn = self.transformed_target  # assume car gets to target
+        self.posn = self.next_posn()
         self.heading = hdng_end
         print(f"New heading = {self.heading}deg  ")
         print(f"Next position = {self.posn}  ")
         print()
 
-    def next_posn(self, heading):
+    def next_posn(self):
         """Calculate next waypoint based on the car's actual heading.
 
-        This isn't working yet, but here's what is intended:
         When driving to the next target pos'n, the car first turns in
-        place, then drives the prescribed distance. However, the actual
-        turn is not exactly equal to the target value. Because we are
-        dead reckoning the car's postion, the estimate is improved by
-        using the actual heading, not the target value."""
+        place, then drives the prescribed distance. However, when the
+        car turns, it doesn't go exactly as commanded. It may be off
+        a degree or two. Because we are dead reckoning the car's
+        postion, the estimate of each successive waypoint is improved
+        by using the actual heading rather than the target value."""
         # Revise calculation of next target based on actual heading
-        theta = heading - car.heading()  # New value - prev value
-        self.rel_trgt_pnt = geo.p2r(self.drive_dist, theta)
-        # Transform rel coords of next target to abs coords
-        print(f"self.posn: {self.posn[0]}, {self.posn[1]}")
-        transformed_target = xform_pnt(self.rel_trgt_pnt,
-                                       self.heading,
-                                       self.posn[0],
-                                       self.posn[1])
-        return transformed_target
+        theta = 90 - car.heading()
+        theta = normalize_angle(theta)
+        rel_trgt_pnt = geo.p2r(self.drive_dist, theta)
+        dx, dy = rel_trgt_pnt  # relative coords of target point
+        px, py = self.posn  # coords of current position
+        return (dx + px, dy + py)
 
 
 if __name__ == "__main__":
