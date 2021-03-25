@@ -131,7 +131,7 @@ class Trip():
         self.theta = 0  # Angle to next target (CCW from X axis)
         self.drive_angle = 0  # Angle to target CCW from Y axis
         self.drive_dist = 0  # Distance to target point
-        self.target_pnt = (0, 0)  # target point (CCS)
+        self.rel_trgt_pnt = (0, 0)  # target point (CCS)
         self.transformed_target = (0, 0)  # target point (WCS)
 
     def complete_one_leg(self):
@@ -150,9 +150,9 @@ class Trip():
     def scan_plan(self):
         """Scan and compute target in open sector."""
         self.data = car.scan(spd=120)
-        self.target_pnt = car.auto_detect_open_sector()
-        # target_pnt to dist, theta for turn & drive
-        dist, theta = geo.r2p(self.target_pnt)
+        self.rel_trgt_pnt = car.auto_detect_open_sector()
+        # convert target_pnt to dist, theta for turn & drive
+        dist, theta = geo.r2p(self.rel_trgt_pnt)
         self.drive_angle = int(theta - 90)
         self.drive_dist = dist
         self.theta = theta
@@ -169,21 +169,16 @@ class Trip():
             if len(points_in_region) > 15:
                 scanpoints.extend(points_in_region)
         # Transform point coordinates from Car CS to Map CS
-        transformed_pnts = [xform_pnt(point,
-                                      self.heading,
-                                      self.posn[0],
-                                      self.posn[1])
+        hdg = self.heading
+        tx, ty = self.posn
+        transformed_pnts = [xform_pnt(point, hdg, tx, ty)
                             for point in scanpoints]
-        transformed_target = xform_pnt(self.target_pnt,
-                                       self.heading,
-                                       self.posn[0],
-                                       self.posn[1])
+        transformed_target = xform_pnt(self.rel_trgt_pnt, hdg, tx, ty)
         # Make overlay plot of points on map, then show & save map
         mapper.plot(transformed_pnts, mapper.load_base_map(),
                     target=transformed_target,
                     carspot=self.posn,
                     seq_nmbr=self.nmbr)
-        # Save transformed target_pnt
         self.transformed_target = transformed_target
 
     def drive(self):
@@ -193,13 +188,40 @@ class Trip():
         else:
             print(f"Turning Left {self.drive_angle} degrees.  ")
         turn_to_abs(car.heading() - self.drive_angle)
-        # Update curr_heading after turning
-        self.heading = -car.heading()
-        print(f"Driving {self.drive_dist:.1f}cm on heading {self.heading}deg  ")
-        print()
+        # Calculate next postion based on heading after turn
+        hdng_strt = -car.heading()
+        self.heading = hdng_strt
+        print(f"Driving {self.drive_dist:.1f}cm on heading {hdng_strt}deg  ")
         drive_ahead(self.drive_dist, spd=CARSPEED)
-        # Updte posn after drive
-        self.posn = self.transformed_target
+        # Update values of self.posn and self.heading
+        hdng_end = -car.heading()
+        avg_hdng = (hdng_strt + hdng_end) / 2
+        #self.posn = self.next_posn(avg_hdng)
+        self.posn = self.transformed_target  # assume car gets to target
+        self.heading = hdng_end
+        print(f"New heading = {self.heading}deg  ")
+        print(f"Next position = {self.posn}  ")
+        print()
+
+    def next_posn(self, heading):
+        """Calculate next waypoint based on the car's actual heading.
+
+        This isn't working yet, but here's what is intended:
+        When driving to the next target pos'n, the car first turns in
+        place, then drives the prescribed distance. However, the actual
+        turn is not exactly equal to the target value. Because we are
+        dead reckoning the car's postion, the estimate is improved by
+        using the actual heading, not the target value."""
+        # Revise calculation of next target based on actual heading
+        theta = heading - car.heading()  # New value - prev value
+        self.rel_trgt_pnt = geo.p2r(self.drive_dist, theta)
+        # Transform rel coords of next target to abs coords
+        print(f"self.posn: {self.posn[0]}, {self.posn[1]}")
+        transformed_target = xform_pnt(self.rel_trgt_pnt,
+                                       self.heading,
+                                       self.posn[0],
+                                       self.posn[1])
+        return transformed_target
 
 
 if __name__ == "__main__":
