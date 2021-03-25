@@ -336,9 +336,9 @@ class OmniCar():
 
         # make radius somewhat larger
         radius = avgdist * 1.5
-        print(f"Sector detection radius: {int(radius)}")
+        logger.debug(f"Sector detection radius: {int(radius)}")
         sectors = self.open_sectors(radius)
-        print(f"Open sectors: {sectors}")
+        logger.debug(f"Open sectors: {sectors}")
 
         # Find first sector of reaonable width
         for sector in sectors:

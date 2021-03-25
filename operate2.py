@@ -91,7 +91,6 @@ def turn_to_abs(target_angle):
             logger.debug(f"heading error: {heading_error} deg")
         car.stop_wheels()
         if -2 <= abs(heading_error) <= 2:
-            print("done")
             done = True
 
 def R_xform(pnt, angle):
@@ -138,7 +137,8 @@ class Trip():
     def complete_one_leg(self):
         """Auto sequence multiple legs of trip."""
         self.nmbr += 1
-        print(f"Leg {self.nmbr}")
+        print(f"Leg {self.nmbr}  ")
+        print(f"Coords: {self.posn}  ")
         self.scan_plan()
         self.show_map()
         char = input("Enter y to continue: ")
@@ -189,13 +189,14 @@ class Trip():
     def drive(self):
         """Drive to target, then update current position & heading."""
         if self.drive_angle < 0:
-            print(f"Turning Right {-self.drive_angle} degrees.")
+            print(f"Turning Right {-self.drive_angle} degrees.  ")
         else:
-            print(f"Turning Left {self.drive_angle} degrees.")
+            print(f"Turning Left {self.drive_angle} degrees.  ")
         turn_to_abs(car.heading() - self.drive_angle)
         # Update curr_heading after turning
         self.heading = -car.heading()
-        print(f"Driving {self.drive_dist:.1f}cm on heading {self.heading}deg")
+        print(f"Driving {self.drive_dist:.1f}cm on heading {self.heading}deg  ")
+        print()
         drive_ahead(self.drive_dist, spd=CARSPEED)
         # Updte posn after drive
         self.posn = self.transformed_target
