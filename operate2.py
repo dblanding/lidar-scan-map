@@ -128,17 +128,19 @@ class Trip():
         self.data = None  # Scan data
         self.posn = (0, 0)  # Position of car (in WCS)
         self.heading = -car.heading()  # Current heading of car
-        self.theta = 0  # Angle to next target (CCW from X axis)
-        self.drive_angle = 0  # Angle to target CCW from Y axis
+        self.theta = 0  # Angle to next target (CCW from car X axis)
+        self.drive_angle = 0  # Angle to target CCW from car Y axis
         self.drive_dist = 0  # Distance to target point
         self.rel_trgt_pnt = (0, 0)  # target point (CCS)
         self.transformed_target = (0, 0)  # target point (WCS)
+        self.waypoints = []  # list of waypoints
 
     def complete_one_leg(self):
         """Auto sequence multiple legs of trip."""
         self.nmbr += 1
         print(f"Leg {self.nmbr}  ")
         print(f"Coords: {self.posn}  ")
+        self.waypoints.append(self.posn)
         self.scan_plan()
         self.show_map()
         char = input("Enter y to continue: ")
@@ -153,7 +155,8 @@ class Trip():
         self.rel_trgt_pnt = car.auto_detect_open_sector()
         # convert target_pnt to dist, theta for turn & drive
         dist, theta = geo.r2p(self.rel_trgt_pnt)
-        self.drive_angle = int(theta - 90)
+        drive_angle = normalize_angle(theta - 90)
+        self.drive_angle = int(drive_angle)
         self.drive_dist = dist
         self.theta = theta
 
@@ -176,6 +179,7 @@ class Trip():
         transformed_target = xform_pnt(self.rel_trgt_pnt, hdg, tx, ty)
         # Make overlay plot of points on map, then show & save map
         mapper.plot(transformed_pnts, mapper.load_base_map(),
+                    waypoints=self.waypoints,
                     target=transformed_target,
                     carspot=self.posn,
                     seq_nmbr=self.nmbr)

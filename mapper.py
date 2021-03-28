@@ -27,8 +27,8 @@ def load_base_map(filename=None):
 
     return coordlist
 
-def plot(scanpoints, map_lines=None, target=None, carspot=None,
-         map_folder="Maps", seq_nmbr=None, show=True,
+def plot(scanpoints, map_lines=None, target=None, waypoints=None,
+         carspot=None, map_folder="Maps", seq_nmbr=None, show=True,
          display_all_points=True):
     """Plot all points and line segments and save in map_folder.
 
@@ -61,6 +61,16 @@ def plot(scanpoints, map_lines=None, target=None, carspot=None,
         xs.append(x)
         ys.append(y)
     plt.scatter(xs, ys, color='#003F72')
+
+    # plot previous waypoints
+    if waypoints:
+        xs = []
+        ys = []
+        for waypoint in waypoints:
+            x, y = waypoint
+            xs.append(x)
+            ys.append(y)
+            plt.scatter(xs, ys, color='#00FF00')
 
     # plot location of car on map
     if carspot:
