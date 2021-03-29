@@ -26,23 +26,6 @@ def get_rate(speed):
     """
     return speed*0.155 - 6.5
 
-def drive_ahead(dist, spd=CARSPEED):
-    """Drive dist and stop, w/out closed-loop steering feedback."""
-    # drive
-    rate = get_rate(spd)  # cm/sec
-    time_to_travel = dist / rate
-    start = time.time()
-    delta_t = 0
-    while delta_t < time_to_travel:
-        delta_t = time.time() - start
-        trim = PIDTRIM
-        sonardist, *_ = car.go(spd, FWD, spin=trim)
-        if sonardist < SONAR_STOP:
-            print(f"Bumped into an obstacle at {sonardist}cm")
-            car.stop_wheels()
-            break
-    car.stop_wheels()
-
 def normalize_angle(angle):
     """Convert any value of angle to a value between -180 and +180."""
     while angle < -180:
@@ -144,7 +127,8 @@ class Trip():
         char = input("Enter y to continue: ")
         if char not in "yY":
             return True
-        self.drive()
+        self.turn()
+        self.drive_to_target()
         return False
 
     def scan_plan(self):
@@ -183,42 +167,45 @@ class Trip():
                     carspot=self.posn,
                     seq_nmbr=self.nmbr)
 
-    def drive(self):
-        """Drive to target, then update current position & heading."""
+    def turn(self):
+        """Turn to target heading, update self.heading"""
         if self.drive_angle < 0:
             print(f"Turning Right {-self.drive_angle} degrees.  ")
         else:
             print(f"Turning Left {self.drive_angle} degrees.  ")
         turn_to_abs(car.heading() - self.drive_angle)
-        # Calculate next postion based on heading after turn
-        hdng_strt = -car.heading()
-        self.heading = hdng_strt
-        print(f"Driving {self.drive_dist:.1f}cm on heading {hdng_strt}deg  ")
-        drive_ahead(self.drive_dist, spd=CARSPEED)
-        # Update values of self.posn and self.heading
-        hdng_end = -car.heading()
-        self.posn = self.next_posn()
-        self.heading = hdng_end
-        print(f"New heading = {self.heading}deg  ")
-        print(f"Next position = {self.posn}  ")
+        self.heading = -car.heading()
+        print(f"Heading after turn: {self.heading}degrees.  ")
+
+    def drive_to_target(self, spd=CARSPEED):
+        """Drive forward self.drive_dist toward target
+        updating self.posn incrementally along the way."""
+        print(f"Driving {self.drive_dist:.1f}cm.  ")
+        trim = PIDTRIM
+        rate = get_rate(spd)  # cm/sec
+        time_to_travel = self.drive_dist / rate
+        start_time = time.time()
+        elapsed_time = 0
+        prev_time = start_time
+        delta_t = 0
+        while elapsed_time < time_to_travel:
+            self.heading = -car.heading()
+            curr_time = time.time()
+            delta_t = curr_time - prev_time
+            elapsed_time = curr_time - start_time
+            prev_time = curr_time
+            sonardist, *_ = car.go(spd, FWD, spin=trim)
+            if sonardist < SONAR_STOP:
+                print(f"Bumped into an obstacle at {sonardist}cm")
+                car.stop_wheels()
+                break
+            dx = rate * delta_t * math.cos((self.heading+90)*math.pi/180)
+            dy = rate * delta_t * math.sin((self.heading+90)*math.pi/180)
+            x, y = self.posn
+            self.posn = (x + dx, y + dy)
+        car.stop_wheels()
+        print(f"Final heading = {self.heading}degrees.  ")
         print()
-
-    def next_posn(self):
-        """Calculate next waypoint based on the car's actual heading.
-
-        When driving to the next target pos'n, the car first turns in
-        place, then drives the prescribed distance. However, when the
-        car turns, it doesn't go exactly as commanded. It may be off
-        a degree or two. Because we are dead reckoning the car's
-        postion, the estimate of each successive waypoint is improved
-        by using the actual heading rather than the target value."""
-        # Revise calculation of next target based on actual heading
-        theta = 90 - car.heading()
-        theta = normalize_angle(theta)
-        rel_trgt_pnt = geo.p2r(self.drive_dist, theta)
-        dx, dy = rel_trgt_pnt  # relative coords of target point
-        px, py = self.posn  # coords of current position
-        return (dx + px, dy + py)
 
 
 if __name__ == "__main__":
