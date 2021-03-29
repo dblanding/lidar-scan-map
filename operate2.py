@@ -1,10 +1,7 @@
-"""Top level operating script for omniwheel vehicle."""
+"""Top level operating script for omni-wheel vehicle."""
 
 import logging
 import math
-from pathlib import Path
-import pickle
-from pprint import pprint
 import sys
 import time
 from constants import CARSPEED, FWD, SONAR_STOP, PIDTRIM
@@ -76,8 +73,8 @@ def turn_to_abs(target_angle):
     # convert problem to one of aiming for a target at 0 degrees.
     heading_error = relative_bearing(target)
     logger.debug(f"relative heading: {heading_error} deg")
-    done = False
-    while not done:
+    turn_complete = False
+    while not turn_complete:
         while heading_error > 2:
             spd = heading_error + 40
             car.spin(spd)
@@ -91,7 +88,7 @@ def turn_to_abs(target_angle):
             logger.debug(f"heading error: {heading_error} deg")
         car.stop_wheels()
         if -2 <= abs(heading_error) <= 2:
-            done = True
+            turn_complete = True
 
 def R_xform(pnt, angle):
     """Transform point by rotation angle (degrees) CW about the origin."""
@@ -118,13 +115,15 @@ def xform_pnt(pnt, ang, tx, ty):
 
 
 class Trip():
-    """Scan, plan, map & drive multi-leg trip.
+    """Scan, plan, map & drive multi-leg trip, starting from 'home'.
+
+    Home position is WCS (0, 0) at a heading angle = 0
     As car moves through its 'world', we need to transform 2D coords
     between car coord sys (CCS) & world coord sys (WCS)."""
 
     def __init__(self):
         car.reset_heading()
-        self.nmbr = 0  # leg number
+        self.nmbr = 0  # Leg number
         self.data = None  # Scan data
         self.posn = (0, 0)  # Position of car (in WCS)
         self.heading = -car.heading()  # Current heading of car
@@ -132,8 +131,7 @@ class Trip():
         self.drive_angle = 0  # Angle to target CCW from car Y axis
         self.drive_dist = 0  # Distance to target point
         self.rel_trgt_pnt = (0, 0)  # target point (CCS)
-        self.transformed_target = (0, 0)  # target point (WCS)
-        self.waypoints = []  # list of waypoints
+        self.waypoints = []  # list of waypoints visited
 
     def complete_one_leg(self):
         """Auto sequence multiple legs of trip."""
@@ -162,8 +160,9 @@ class Trip():
 
     def show_map(self):
         """Show (most salient) scan points overlayed on a map.
-        Also show proposed target point (yellow)
-        and current car position (red)."""
+        Also show proposed next target point (yellow),
+        current car position (red),
+        and previously visited waypoints (green)."""
         pscan = proscan2.ProcessScan(self.data)
         longest_regions = pscan.regions_by_length()
         scanpoints = []  # xy coords of points in longest regions
@@ -183,7 +182,6 @@ class Trip():
                     target=transformed_target,
                     carspot=self.posn,
                     seq_nmbr=self.nmbr)
-        self.transformed_target = transformed_target
 
     def drive(self):
         """Drive to target, then update current position & heading."""
@@ -224,7 +222,7 @@ class Trip():
 
 
 if __name__ == "__main__":
-    car.reset_heading()
+
     trip = Trip()
     done = False
     while not done:
