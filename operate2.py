@@ -1,4 +1,9 @@
-"""Top level operating script for omni-wheel vehicle."""
+"""Top level operating script for omni-wheel vehicle.
+With omni-wheel vehicle poised in 'Home' position, click 'run'.
+Vehicle will begin a multi-leg trip by computing waypoints in open
+sectors, then pausing at each waypoint to scan & map & repeat. 
+Will follow a generally CCW loop through its environment. 
+Markdown file will be written on completion of trip."""
 
 import logging
 import math

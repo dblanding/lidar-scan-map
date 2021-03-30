@@ -1,12 +1,15 @@
 import datetime
+import os
 import shutil
 
 class TripLog():
     """Write a trip log file in .md format.
 
-    Create a new folder (w/ timestamp name) in the current directory.
+    Create a new folder (named w/ timestamp) in current directory.
     Save the completed logfile in the new folder.
-    Copy the Maps folder into the new folder."""
+    Copy contents of the Maps folder into the new folder.
+    Remove contents of the Maps folder.
+    """
 
     def __init__(self):
         now = datetime.datetime.now()
@@ -15,6 +18,9 @@ class TripLog():
         self.mapfolder = self.folder + "/Maps"
         self.logfilename = self.folder + "/trip_log.md"
         self.text = []  # list of text lines
+        title = f"## Log for Trip started {now.ctime()}."
+        self.addline(title)
+        self.addline()
 
     def addline(self, line=''):
         """Add line to self.text"""
@@ -33,10 +39,15 @@ class TripLog():
         self.text.append(line)
 
     def write(self):
-        """Create containing folder with timestamp name
-        Copy maps into maps subfolder.
-        Write all lines in self.text to logfilename."""
+        """Create containing folder with timestamp name.
+        Copy Maps folder into subfolder.
+        Write all lines in self.text to logfilename.
+        Remove contents of Maps folder.
+        """
         shutil.copytree("Maps", self.mapfolder)
         with open(self.logfilename, 'w') as file:
             file.writelines(self.text)
+        # Delete all files from Maps directory
+        for file in os.scandir("Maps"):
+            os.remove(file.path)
 
