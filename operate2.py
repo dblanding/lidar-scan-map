@@ -9,6 +9,7 @@ import geom_utils as geo
 import mapper
 import omnicar as oc
 import proscan2
+from triplogger import TripLog
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
@@ -115,17 +116,20 @@ class Trip():
         self.drive_dist = 0  # Distance to target point
         self.rel_trgt_pnt = (0, 0)  # target point (CCS)
         self.waypoints = []  # list of waypoints visited
+        self.log = TripLog()
 
     def complete_one_leg(self):
         """Auto sequence multiple legs of trip."""
         self.nmbr += 1
-        print(f"Leg {self.nmbr}  ")
-        print(f"Coords: {self.posn}  ")
+        self.log.addplot(self.nmbr)
+        self.log.addline(f"Leg {self.nmbr}")
+        self.log.addline(f"Coords: {self.posn}")
         self.waypoints.append(self.posn)
         self.scan_plan()
         self.show_map()
         char = input("Enter y to continue: ")
         if char not in "yY":
+            self.log.write()
             return True
         self.turn()
         self.drive_to_target()
@@ -170,17 +174,17 @@ class Trip():
     def turn(self):
         """Turn to target heading, update self.heading"""
         if self.drive_angle < 0:
-            print(f"Turning Right {-self.drive_angle} degrees.  ")
+            self.log.addline(f"Turning Right {-self.drive_angle} deg.")
         else:
-            print(f"Turning Left {self.drive_angle} degrees.  ")
+            self.log.addline(f"Turning Left {self.drive_angle} deg.")
         turn_to_abs(car.heading() - self.drive_angle)
         self.heading = -car.heading()
-        print(f"Heading after turn: {self.heading}degrees.  ")
+        self.log.addline(f"Heading after turn: {self.heading} deg.")
 
     def drive_to_target(self, spd=CARSPEED):
         """Drive forward self.drive_dist toward target
         updating self.posn incrementally along the way."""
-        print(f"Driving {self.drive_dist:.1f}cm.  ")
+        self.log.addline(f"Driving {self.drive_dist:.1f} cm.")
         trim = PIDTRIM
         rate = get_rate(spd)  # cm/sec
         time_to_travel = self.drive_dist / rate
@@ -196,7 +200,7 @@ class Trip():
             prev_time = curr_time
             sonardist, *_ = car.go(spd, FWD, spin=trim)
             if sonardist < SONAR_STOP:
-                print(f"Bumped into an obstacle at {sonardist}cm")
+                self.log.addline(f"Bumped into obstacle at {sonardist} cm")
                 car.stop_wheels()
                 break
             dx = rate * delta_t * math.cos((self.heading+90)*math.pi/180)
@@ -204,8 +208,8 @@ class Trip():
             x, y = self.posn
             self.posn = (x + dx, y + dy)
         car.stop_wheels()
-        print(f"Final heading = {self.heading}degrees.  ")
-        print()
+        self.log.addline(f"Final heading = {self.heading} deg.")
+        self.log.addline()
 
 
 if __name__ == "__main__":
