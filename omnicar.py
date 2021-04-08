@@ -134,7 +134,7 @@ class OmniCar():
 
         # convert from polar coordinates to omni_car's 'natural' coords
         # where one coaxial pair of wheels drives u and the other drives v
-        u, v = geo.p2r(speed, angle - 45)
+        u, v = geo.p2r(speed, angle + 45)
 
         # motor numbers
         # m1, m2, m3, m4 = (1, 2, 3, 4)
@@ -360,13 +360,13 @@ def encoder_count_to_radians(enc_cnt):
     Convert encoder count to angle (radians) in car coordinate system
 
     encoder_count values start at 0 and increase with CW rotation.
-    straight back (-Y axis): enc_cnt = 0; theta = 3*pi/2
-    straight left (-X axis): enc_cnt = 10,000; theta = pi
-    straight ahead (+Y axis): enc_cnt = 20,000; theta = pi/2
-    straight right (+X axis): enc_cnt = 30,000; theta = 0
+    straight ahead (+X axis): enc_cnt = 20,000; theta = 0
+    straight back (-X axis): enc_cnt = 0; theta = pi
+    straight left (+Y axis): enc_cnt = 10,000; theta = pi/2
+    straight right (-Y axis): enc_cnt = 30,000; theta = -pi/2
     (enc_cnt tops out at 32765, so no info past that)
     """
-    theta = (30000 - enc_cnt) * math.pi / (30000 - 10000)
+    theta = math.pi * (20000 - enc_cnt) / (20000)
     return theta
 
 if __name__ == "__main__":

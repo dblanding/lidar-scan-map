@@ -5,10 +5,10 @@ SONAR_LIDAR_OFFSET = 15  # offset distance between sonar & lidar
 # Driving parameters
 CARSPEED = 200  # default car speed
 SONAR_STOP = 5  # threshold E-stop distance (cm) 
-FWD = 94   # forward drive direction (with 4 deg cross-track correction)
-LFT = 180  # left drive direction
-REV = 270  # reverse drive direction
-RGT = 0  # right drive direction
+FWD = 0   # forward drive direction (with 4 deg cross-track correction)
+LFT = 90  # left drive direction
+REV = 180  # reverse drive direction
+RGT = 90  # right drive direction
 
 # PID feedback related parameters
 KP = 0.6  # steering PID proportional coefficient

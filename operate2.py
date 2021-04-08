@@ -117,7 +117,6 @@ class Trip():
         self.posn = (0, 0)  # Position of car (in WCS)
         self.heading = -car.heading  # Current heading of car
         self.theta = 0  # Angle to next target (CCW from car X axis)
-        self.drive_angle = 0  # Angle to target CCW from car Y axis
         self.drive_dist = 0  # Distance to target point
         self.rel_trgt_pnt = (0, 0)  # target point (CCS)
         self.waypoints = []  # list of waypoints visited
@@ -146,10 +145,8 @@ class Trip():
         self.rel_trgt_pnt = car.auto_detect_open_sector()
         # convert target_pnt to dist, theta for turn & drive
         dist, theta = geo.r2p(self.rel_trgt_pnt)
-        drive_angle = normalize_angle(theta - 90)
-        self.drive_angle = int(drive_angle)
+        self.theta = normalize_angle(theta)
         self.drive_dist = dist
-        self.theta = theta
 
     def show_map(self):
         """Show (most salient) scan points overlayed on a map.
@@ -178,11 +175,11 @@ class Trip():
 
     def turn(self):
         """Turn to target heading, update self.heading"""
-        if self.drive_angle < 0:
-            self.log.addline(f"Turning Right {-self.drive_angle} deg.")
+        if self.theta < 0:
+            self.log.addline(f"Turning Right {-self.theta} deg.")
         else:
-            self.log.addline(f"Turning Left {self.drive_angle} deg.")
-        turn_to_abs(car.heading - self.drive_angle)
+            self.log.addline(f"Turning Left {self.theta} deg.")
+        turn_to_abs(car.heading - self.theta)
         self.heading = -car.heading
         self.log.addline(f"Heading after turn: {self.heading} deg.")
 
@@ -208,8 +205,8 @@ class Trip():
                 self.log.addline(f"Bumped into obstacle at {sonardist} cm")
                 car.stop_wheels()
                 break
-            dx = rate * delta_t * math.cos((self.heading+90)*math.pi/180)
-            dy = rate * delta_t * math.sin((self.heading+90)*math.pi/180)
+            dx = rate * delta_t * math.cos((self.heading)*math.pi/180)
+            dy = rate * delta_t * math.sin((self.heading)*math.pi/180)
             x, y = self.posn
             self.posn = (x + dx, y + dy)
         car.stop_wheels()
@@ -223,4 +220,5 @@ if __name__ == "__main__":
     done = False
     while not done:
         done = trip.complete_one_leg()
+
     car.close()
