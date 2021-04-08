@@ -51,7 +51,7 @@ def relative_bearing(target):
     bearing of the target is +90 degrees.
     This is consistent with the standard mathematics convention of
     measuring angles in the CCW direction as positive (+)."""
-    rel_brng = int(car.heading() - target)
+    rel_brng = int(car.heading - target)
     return normalize_angle(rel_brng)
 
 def turn_to_abs(target_angle):
@@ -115,7 +115,7 @@ class Trip():
         self.nmbr = 0  # Leg number
         self.data = None  # Scan data
         self.posn = (0, 0)  # Position of car (in WCS)
-        self.heading = -car.heading()  # Current heading of car
+        self.heading = -car.heading  # Current heading of car
         self.theta = 0  # Angle to next target (CCW from car X axis)
         self.drive_angle = 0  # Angle to target CCW from car Y axis
         self.drive_dist = 0  # Distance to target point
@@ -182,8 +182,8 @@ class Trip():
             self.log.addline(f"Turning Right {-self.drive_angle} deg.")
         else:
             self.log.addline(f"Turning Left {self.drive_angle} deg.")
-        turn_to_abs(car.heading() - self.drive_angle)
-        self.heading = -car.heading()
+        turn_to_abs(car.heading - self.drive_angle)
+        self.heading = -car.heading
         self.log.addline(f"Heading after turn: {self.heading} deg.")
 
     def drive_to_target(self, spd=CARSPEED):
@@ -198,7 +198,7 @@ class Trip():
         prev_time = start_time
         delta_t = 0
         while elapsed_time < time_to_travel:
-            self.heading = -car.heading()
+            self.heading = -car.heading
             curr_time = time.time()
             delta_t = curr_time - prev_time
             elapsed_time = curr_time - start_time

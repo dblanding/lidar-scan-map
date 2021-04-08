@@ -70,16 +70,15 @@ class OmniCar():
     """
 
     def __init__(self):
-        """Configure HMC5883L (compass) & store most recent lidar value."""
         self.distance = 0  # last measured distance (cm) from lidar
         self.points = None  # scan data (list of dictionaries)
-        self.target = None  # x, y coords of target point to drive to
 
+    @property
     def heading(self):
-        """Return heading (gyro yaw) measured by BNO085 IMU (degrees).
+        """Return instantaneous heading (gyro yaw) in degrees.
 
         BNO085 sends data @ 100 reading/sec on uart in RVC mode.
-        yaw has a range of +/- 180˚ and is provided in 0.01˚ increments.
+        yaw has a range of +/- 180˚ in 0.01˚ increments.
         """
         uart.reset_input_buffer()  # purge stale data
         yaw, *_ = rvc.heading
