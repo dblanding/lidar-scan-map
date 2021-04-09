@@ -13,20 +13,6 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 GAP = 10  # Threshold distance between adjacent points for continuity
 FIT = 4  # Threshold distance (point to line) for good fit
 
-def encoder_count_to_radians(enc_cnt):
-    """
-    Convert encoder count to angle (radians) in car coordinate system
-
-    encoder_count values start at 0 and increase with CW rotation.
-    straight back (-Y axis): enc_cnt = 0; theta = 3*pi/2
-    straight left (-X axis): enc_cnt = 10,000; theta = pi
-    straight ahead (+Y axis): enc_cnt = 20,000; theta = pi/2
-    straight right (+X axis): enc_cnt = 30,000; theta = 0
-    (enc_cnt tops out at 32765, so no info past that)
-    """
-    theta = (30000 - enc_cnt) * math.pi / (30000 - 10000)
-    return theta
-
 
 class ProcessScan():
     """Process scan data.
@@ -35,8 +21,6 @@ class ProcessScan():
     likely to represent continuous surfaces.
     Find best fit straight lines within regions, likely to
     represent straight sections of walls.
-    Find unobstructed directions likely to represent a clear path
-    for navigation.
     """
 
     def __init__(self, pointlist, lev=LEV, hev=HEV, gap=GAP, fit=FIT):
@@ -343,64 +327,3 @@ class ProcessScan():
         angle = geo.p2p_angle(start_coords, end_coords)
         dist = geo.p2line_dist((0, 0), line)  # perp distance to line
         return (coords, length, angle, dist)
-
-    def open_sectors(self, radius):
-        """Return list of sectors containing no points at dist < radius
-
-        Each open sector is a 2-element tuple of bounding angles (deg)
-        Sectors and angles are in scan order, so largest angles first.
-
-        The idea is to look for a sector of sufficient width to allow
-        the car through, then drive along the center of the sector.
-        """
-        sectors = []
-        in_sector = False
-        n = 0
-        for pnt in self.points:
-            n += 1
-            dist = pnt.get("dist")
-            if not in_sector:
-                if dist < 0 or dist > radius:
-                    start_angle = int(pnt.get("theta") * 180 / math.pi)
-                    end_angle = start_angle
-                    in_sector = True
-            elif in_sector:
-                if dist < 0 or dist > radius:
-                    end_angle = int(pnt.get("theta") * 180 / math.pi)
-                elif dist < radius:
-                    in_sector = False
-                    sector = (start_angle, end_angle)
-                    sectors.append(sector)
-        sector = (start_angle, end_angle)  # final sector?
-        if sector not in set(sectors):
-            sectors.append(sector)
-        return sectors
-
-    def auto_detect_open_sector(self):
-        """ Under development...
-        First find average dist value (not == -3).
-        Then look for sectors at radius = 1.5 * average.
-        Put target at mid-anlge at radius/2.
-        Convert to (x, y) coords and save as self.target
-        so that map can access it.
-        """
-        # Find average (non-zero) dist value
-        rvals = [point.get('dist')
-                 for point in self.points
-                 if point.get('dist') != 3]
-        avgdist = sum(rvals)/len(rvals)
-
-        # make radius somewhat larger
-        radius = avgdist * 1.5
-        print(f"radius: {int(radius)}")
-        sectors = self.open_sectors(radius)
-        print(sectors)
-
-        # Find first sector of reaonable width
-        for sector in sectors:
-            angle0, angle1 = sector
-            if (angle0 - angle1) > 12:
-                target_angle = (angle0 + angle1)/2
-                target_coords = geo.p2r(radius/2, target_angle)
-                self.target = target_coords
-                break

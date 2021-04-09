@@ -20,7 +20,7 @@ import sys
 import time
 import Adafruit_ADS1x15
 from adafruit_bno08x_rvc import BNO08x_RVC
-from constants import *
+from constants import LEV, HEV, VLEG
 import geom_utils as geo
 
 logger = logging.getLogger(__name__)
@@ -61,6 +61,20 @@ logger.info(f"USB_Serial port = {usbport}")
 i2cbus = smbus.SMBus(1)
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain
+
+def encoder_count_to_radians(enc_cnt):
+    """
+    Convert encoder count to angle (radians) in car coordinate system
+
+    encoder_count values start at 0 and increase with CW rotation.
+    straight ahead (+X axis): enc_cnt = 20,000; theta = 0
+    straight back (-X axis): enc_cnt = 0; theta = pi
+    straight left (+Y axis): enc_cnt = 10,000; theta = pi/2
+    straight right (-Y axis): enc_cnt = 30,000; theta = -pi/2
+    (enc_cnt tops out at 32765, so no info past that)
+    """
+    theta = math.pi * (20000 - enc_cnt) / (20000)
+    return theta
 
 
 class OmniCar():
@@ -322,7 +336,7 @@ class OmniCar():
 
     def auto_detect_open_sector(self):
         """ Under development...
-        First find average dist value (not == -3).
+        First find average (non-zero) dist value.
         Then look for sectors at radius = 1.5 * average.
         Put target near mid-angle a little past radius/2.
         Convert to (x, y) coords and return it.
@@ -330,7 +344,7 @@ class OmniCar():
         # Find average (non-zero) dist value
         rvals = [point.get('dist')
                  for point in self.points
-                 if point.get('dist') != 3]
+                 if point.get('dist') != -VLEG]
         avgdist = sum(rvals)/len(rvals)
 
         # make radius somewhat larger
@@ -354,20 +368,6 @@ class OmniCar():
         i2cbus.close()
         GPIO.cleanup()
 
-
-def encoder_count_to_radians(enc_cnt):
-    """
-    Convert encoder count to angle (radians) in car coordinate system
-
-    encoder_count values start at 0 and increase with CW rotation.
-    straight ahead (+X axis): enc_cnt = 20,000; theta = 0
-    straight back (-X axis): enc_cnt = 0; theta = pi
-    straight left (+Y axis): enc_cnt = 10,000; theta = pi/2
-    straight right (-Y axis): enc_cnt = 30,000; theta = -pi/2
-    (enc_cnt tops out at 32765, so no info past that)
-    """
-    theta = math.pi * (20000 - enc_cnt) / (20000)
-    return theta
 
 if __name__ == "__main__":
     car = OmniCar()
