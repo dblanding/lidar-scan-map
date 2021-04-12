@@ -24,38 +24,41 @@ from constants import LEV, HEV, VLEG
 import geom_utils as geo
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 # Adafruit BNO085 IMU
 uart = serial.Serial("/dev/serial0", 115200)
 rvc = BNO08x_RVC(uart)
-RESET_PIN = 18  # Broadcom pin 18 (Pi pin 12)
+
+# GPIO pin setup
+HDG_RESET_PIN = 18  # Broadcom pin 18 (Pi pin 12)
+ODO_RESET_PIN = 24  # Broadcom pin 24 (Pi pin 18)
 GPIO.setmode(GPIO.BCM)
-GPIO.setup(RESET_PIN, GPIO.OUT)
-GPIO.output(RESET_PIN, GPIO.HIGH)
+GPIO.setup(HDG_RESET_PIN, GPIO.OUT)
+GPIO.setup(ODO_RESET_PIN, GPIO.OUT)
+GPIO.output(HDG_RESET_PIN, GPIO.HIGH)
+GPIO.output(ODO_RESET_PIN, GPIO.HIGH)
 
 #  Bi-directional communication with Arduino
 ports = ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyS0']
 for port in ports:
     if os.path.exists(port):
         ser0 = serial.Serial(port, 9600, timeout=0.5)
-        #ser1 = serial.Serial(port, 115200)
         break
     else:
         port = None
-logger.info(f"Serial port = {port}")
+logger.info(f"Arduino communication port = {port}")
 
 # Lidar distance sensor
-usbports = ['/dev/ttyUSB0', '/dev/ttyUSB1']
-for usbport in usbports:
-    if os.path.exists(usbport):
-        #ser0 = serial.Serial(usbport, 9600, timeout=0.5)
-        ser1 = serial.Serial(usbport, 115200)
-        break
-    else:
-        usbport = None
-logger.info(f"USB_Serial port = {usbport}")
+lidarport = '/dev/ttyUSB0'
+ser1 = serial.Serial(lidarport, 115200)
+logger.info(f"Lidar port = {lidarport}")
+
+# Odometer
+odometerport = '/dev/ttyUSB1'
+ser2 = serial.Serial(odometerport, 9600, timeout=0.01)
+logger.info(f"Odometer port = {odometerport}")
 
 # 16 bit ADC (for encoder values)
 i2cbus = smbus.SMBus(1)
@@ -85,6 +88,7 @@ class OmniCar():
 
     def __init__(self):
         self.distance = 0  # last measured distance (cm) from lidar
+        self.last_odo_str = '0'  # last odometer string distance (cm)
         self.points = None  # scan data (list of dictionaries)
 
     @property
@@ -100,9 +104,41 @@ class OmniCar():
 
     def reset_heading(self):
         """Reset heading to 0 degrees."""
-        GPIO.output(RESET_PIN, GPIO.LOW)
+        GPIO.output(HDG_RESET_PIN, GPIO.LOW)
         time.sleep(0.01)
-        GPIO.output(RESET_PIN, GPIO.HIGH)
+        GPIO.output(HDG_RESET_PIN, GPIO.HIGH)
+
+    def _read_odometer(self):
+        """Read and return odometer data"""
+        in_string = None
+        if ser2.in_waiting:
+            in_bytes = ser2.readline()
+            try:
+                in_string = in_bytes.decode("utf-8").rstrip()
+            except UnicodeDecodeError:
+                in_string = None
+        return in_string
+
+    @property
+    def odometer(self):
+        """Read odometer data and return value."""
+        ser2.reset_input_buffer()  # throw away accumulated stale values
+        time.sleep(0.05)
+        odo_str = self._read_odometer()  # possibly truncated value
+        odo_str = self._read_odometer()
+        if odo_str:
+            self.last_odo_str = odo_str
+        else:  # If unchanged, read value is None
+            odo_str = self.last_odo_str
+        return float(odo_str)
+
+    def reset_odometer(self):
+        """Reset odometer to 0 cm."""
+        GPIO.output(ODO_RESET_PIN, GPIO.LOW)
+        time.sleep(0.01)
+        GPIO.output(ODO_RESET_PIN, GPIO.HIGH)
+        self.last_odo_str = '0'
+        logger.debug(f"Odometer reset: value = {self.odometer}")
 
     def _read_serial_data(self):
         """Read and return one line from serial port"""
@@ -365,6 +401,7 @@ class OmniCar():
     def close(self):
         ser0.close()
         ser1.close()
+        ser2.close()
         i2cbus.close()
         GPIO.cleanup()
 
@@ -374,13 +411,7 @@ if __name__ == "__main__":
     time.sleep(0.5)
     from_arduino = car._read_serial_data()
     logger.debug(f"Message from Arduino: {from_arduino}")
-    for _ in range(5):
-        print("")
-        print(f"BNO085 Gyro Heading = {car.heading()}")
-        time.sleep(1)
-    car.reset_heading()
-    for _ in range(5):
-        print("")
-        print(f"BNO085 Gyro Heading = {car.heading()}")
-        time.sleep(1)
+    for x in range(20):
+        print(car.odometer)
+        time.sleep(0.5)
     car.close()

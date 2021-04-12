@@ -17,10 +17,11 @@ import proscan2
 from triplogger import TripLog
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = oc.OmniCar()
+car.reset_odometer()
 time.sleep(0.5)
 from_arduino = car._read_serial_data()
 logger.debug(f"Message from Arduino: {from_arduino}")
@@ -65,17 +66,18 @@ def turn_to_abs(target_angle):
     turn_complete = False
     while not turn_complete:
         while heading_error > 2:
-            spd = heading_error + 40
+            spd = heading_error / 3 + 40
             car.spin(spd)
             heading_error = relative_bearing(target)
             logger.debug(f"relative heading: {heading_error} deg")
         car.stop_wheels()
         while heading_error < -2:
-            spd = heading_error - 40
+            spd = heading_error / 3 - 40
             car.spin(spd)
             heading_error = relative_bearing(target)
             logger.debug(f"heading error: {heading_error} deg")
         car.stop_wheels()
+        heading_error = relative_bearing(target)
         if -2 <= abs(heading_error) <= 2:
             turn_complete = True
 
@@ -104,11 +106,13 @@ def xform_pnt(pnt, ang, tx, ty):
 
 
 class Trip():
-    """Scan, plan, map & drive multi-leg trip, starting from 'home'.
+    """Scan, plan, map & drive multi-leg trip.
 
-    Home position is WCS (0, 0) at a heading angle = 0
-    As car moves through its 'world', we need to transform 2D coords
-    between car coord sys (CCS) & world coord sys (WCS)."""
+    Starting from 'home' position at WCS (0, 0), heading angle = 0,
+    car navigates automously, by analyzing scan data and finding its
+    next waypoint in the left-most open sector, then drives toward it.
+    As it moves along each leg of its trip, it tracks its progress to
+    each successive waypoint onto a map of its world."""
 
     def __init__(self):
         car.reset_heading()
@@ -119,7 +123,8 @@ class Trip():
         self.theta = 0  # Angle to next target (CCW from car X axis)
         self.drive_dist = 0  # Distance to target point
         self.rel_trgt_pnt = (0, 0)  # target point (CCS)
-        self.waypoints = []  # list of waypoints visited
+        self.waypoints = [self.posn,]  # list of waypoints visited
+        self.COAST_DIST = 10  # coast dist (cm) after wheels stopped
         self.log = TripLog()
 
     def complete_one_leg(self):
@@ -184,32 +189,29 @@ class Trip():
         self.log.addline(f"Heading after turn: {self.heading} deg.")
 
     def drive_to_target(self, spd=CARSPEED):
-        """Drive forward self.drive_dist toward target
+        """Drive forward self.drive_dist toward target,
         updating self.posn incrementally along the way."""
+        car.reset_odometer()
+        prev_dist = 0
+        waypoints = []
         self.log.addline(f"Driving {self.drive_dist:.1f} cm.")
         trim = PIDTRIM
-        rate = get_rate(spd)  # cm/sec
-        time_to_travel = self.drive_dist / rate
-        start_time = time.time()
-        elapsed_time = 0
-        prev_time = start_time
-        delta_t = 0
-        while elapsed_time < time_to_travel:
-            self.heading = -car.heading
-            curr_time = time.time()
-            delta_t = curr_time - prev_time
-            elapsed_time = curr_time - start_time
-            prev_time = curr_time
-            sonardist, *_ = car.go(spd, FWD, spin=trim)
-            if sonardist < SONAR_STOP:
-                self.log.addline(f"Bumped into obstacle at {sonardist} cm")
-                car.stop_wheels()
-                break
-            dx = rate * delta_t * math.cos((self.heading)*math.pi/180)
-            dy = rate * delta_t * math.sin((self.heading)*math.pi/180)
-            x, y = self.posn
-            self.posn = (x + dx, y + dy)
+        dist_to_go = self.drive_dist - car.odometer
+        print(dist_to_go)
+        while dist_to_go > self.COAST_DIST:
+            car.go(spd, FWD, spin=trim)
+            # Update self.posn incrementally
+            curr_dist = car.odometer
+            incr_dist = curr_dist - prev_dist
+            prev_dist = curr_dist
+            hdg = -car.heading
+            dx, dy = geo.p2r(incr_dist, hdg)
+            wx, wy = self.posn
+            self.posn = (wx+dx, wy+dy)
+            waypoints.append(self.posn)
+            dist_to_go = self.drive_dist - car.odometer
         car.stop_wheels()
+        self.waypoints.extend(waypoints)
         self.log.addline(f"Final heading = {self.heading} deg.")
         self.log.addline()
 
