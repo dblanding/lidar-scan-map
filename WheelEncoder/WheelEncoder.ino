@@ -19,12 +19,26 @@ void setup() {
 
 long oldPosition  = -999;
 float dist = 0;
+bool flow = false; // data flow
 
 void loop() {
   long newPosition = myEnc.read();
   if (newPosition != oldPosition) {
     oldPosition = newPosition;
-    dist = newPosition * 3.14159 / 288; //cm
-    Serial.println(dist);
+    if (flow) {
+      dist = newPosition * 3.14159 / 288; //cm
+      Serial.println(dist);
+    }
+  }
+  if (Serial.available() > 0) {
+    // Read incoming string from RasPi
+    String inString = Serial.readString();
+    delay(10);
+    if (inString == "stop\n") {
+      flow = false;
+    }
+    else {
+      flow = true;
+    }
   }
 }
