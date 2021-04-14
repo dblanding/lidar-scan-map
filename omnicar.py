@@ -20,25 +20,18 @@ import sys
 import time
 import Adafruit_ADS1x15
 from adafruit_bno08x_rvc import BNO08x_RVC
-from constants import LEV, HEV, VLEG
+from constants import LEV, HEV, VLEG, PIDTRIM
 import geom_utils as geo
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 # Adafruit BNO085 IMU
-uart = serial.Serial("/dev/serial0", 115200)
+imuport = "/dev/serial0"
+uart = serial.Serial(imuport, 115200, timeout=0.1)
+logger.info(f"BNO085 IMU UART port = {imuport}")
 rvc = BNO08x_RVC(uart)
-
-# GPIO pin setup
-HDG_RESET_PIN = 18  # Broadcom pin 18 (Pi pin 12)
-ODO_RESET_PIN = 24  # Broadcom pin 24 (Pi pin 18)
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(HDG_RESET_PIN, GPIO.OUT)
-GPIO.setup(ODO_RESET_PIN, GPIO.OUT)
-GPIO.output(HDG_RESET_PIN, GPIO.HIGH)
-GPIO.output(ODO_RESET_PIN, GPIO.HIGH)
 
 #  Bi-directional communication with Arduino
 ports = ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyS0']
@@ -57,13 +50,22 @@ logger.info(f"Lidar port = {lidarport}")
 
 # Odometer
 odometerport = '/dev/ttyUSB1'
-ser2 = serial.Serial(odometerport, 9600, timeout=0.01)
+ser2 = serial.Serial(odometerport, 9600, timeout=0.1)
 logger.info(f"Odometer port = {odometerport}")
 
 # 16 bit ADC (for encoder values)
 i2cbus = smbus.SMBus(1)
 adc = Adafruit_ADS1x15.ADS1115()
 GAIN = 1  #ADC gain
+
+# GPIO pin setup
+HDG_RESET_PIN = 18  # Broadcom pin 18 (Pi pin 12)
+ODO_RESET_PIN = 24  # Broadcom pin 24 (Pi pin 18)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(HDG_RESET_PIN, GPIO.OUT)
+GPIO.setup(ODO_RESET_PIN, GPIO.OUT)
+GPIO.output(HDG_RESET_PIN, GPIO.HIGH)
+GPIO.output(ODO_RESET_PIN, GPIO.HIGH)
 
 def encoder_count_to_radians(enc_cnt):
     """
@@ -88,7 +90,6 @@ class OmniCar():
 
     def __init__(self):
         self.distance = 0  # last measured distance (cm) from lidar
-        self.last_odo_str = '0'  # last odometer string distance (cm)
         self.points = None  # scan data (list of dictionaries)
 
     @property
@@ -107,29 +108,29 @@ class OmniCar():
         GPIO.output(HDG_RESET_PIN, GPIO.LOW)
         time.sleep(0.01)
         GPIO.output(HDG_RESET_PIN, GPIO.HIGH)
+        logger.debug("Heading reset to 0 degrees")
 
     def _read_odometer(self):
-        """Read and return odometer data"""
-        in_string = None
-        if ser2.in_waiting:
-            in_bytes = ser2.readline()
-            try:
-                in_string = in_bytes.decode("utf-8").rstrip()
-            except UnicodeDecodeError:
-                in_string = None
+        """Request, read and return odometer data as string"""
+        ser2.write('foo\n'.encode())
+        flag = False
+        while not flag:
+            if ser2.in_waiting:
+                in_bytes = ser2.readline()
+                try:
+                    in_string = in_bytes.decode("utf-8").rstrip()
+                except UnicodeDecodeError:
+                    in_string = '0'
+                flag = True
         return in_string
 
     @property
     def odometer(self):
         """Read odometer data and return value."""
-        ser2.reset_input_buffer()  # throw away accumulated stale values
-        time.sleep(0.05)
-        odo_str = self._read_odometer()  # possibly truncated value
+        start = time.time()
         odo_str = self._read_odometer()
-        if odo_str:
-            self.last_odo_str = odo_str
-        else:  # If unchanged, read value is None
-            odo_str = self.last_odo_str
+        delta = time.time() - start
+        logger.debug(f"Time to run odometer = {delta}")
         return float(odo_str)
 
     def reset_odometer(self):
@@ -137,7 +138,6 @@ class OmniCar():
         GPIO.output(ODO_RESET_PIN, GPIO.LOW)
         time.sleep(0.01)
         GPIO.output(ODO_RESET_PIN, GPIO.HIGH)
-        self.last_odo_str = '0'
         logger.debug(f"Odometer reset: value = {self.odometer}")
 
     def _read_serial_data(self):
@@ -411,7 +411,16 @@ if __name__ == "__main__":
     time.sleep(0.5)
     from_arduino = car._read_serial_data()
     logger.debug(f"Message from Arduino: {from_arduino}")
-    for x in range(20):
-        print(car.odometer)
-        time.sleep(0.5)
+    car.reset_odometer()
+    time.sleep(0.5)
+    car.go(150, 0, spin=PIDTRIM)
+    odo = car.odometer
+    while odo < 100:
+        odo = car.odometer
+        print(f"HEADING:\t {car.heading}")
+        print(f"ODOMETER: {odo}")
+    car.stop_wheels()
+    time.sleep(1)
+    odo = car.odometer
+    print(f"ODOMETER: {odo}")
     car.close()

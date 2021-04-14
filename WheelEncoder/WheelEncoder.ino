@@ -1,7 +1,8 @@
 /* Encoder Library - Basic Example
  * http://www.pjrc.com/teensy/td_libs_Encoder.html
  *
- * This example code is in the public domain.
+ * Sends distance (cm) in response to any request string
+ * Typical time to run = 0.132 seconds
  */
 
 #include <Encoder.h>
@@ -15,30 +16,22 @@ Encoder myEnc(12, 13);
 
 void setup() {
   Serial.begin(9600);
+  Serial.setTimeout(100); // Defaults to 1000 mSec
 }
 
-long oldPosition  = -999;
+long encoderPosn  = 0;
 float dist = 0;
-bool flow = false; // data flow
+String inString;
 
 void loop() {
-  long newPosition = myEnc.read();
-  if (newPosition != oldPosition) {
-    oldPosition = newPosition;
-    if (flow) {
-      dist = newPosition * 3.14159 / 288; //cm
-      Serial.println(dist);
-    }
-  }
+  encoderPosn = myEnc.read();
+  dist = encoderPosn * 3.14159 / 288.0; //cm
+
   if (Serial.available() > 0) {
+    delay(10); // give time for entire string to arrive
     // Read incoming string from RasPi
-    String inString = Serial.readString();
+    inString = Serial.readString();
     delay(10);
-    if (inString == "stop\n") {
-      flow = false;
-    }
-    else {
-      flow = true;
-    }
+    Serial.println(dist);
   }
 }

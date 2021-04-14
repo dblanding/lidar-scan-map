@@ -17,14 +17,14 @@ import proscan2
 from triplogger import TripLog
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set to DEBUG | INFO | WARNING | ERROR
+logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = oc.OmniCar()
 car.reset_odometer()
 time.sleep(0.5)
 from_arduino = car._read_serial_data()
-logger.debug(f"Message from Arduino: {from_arduino}")
+logger.info(f"Message from Arduino: {from_arduino}")
 
 def get_rate(speed):
     """Return rate (cm/sec) for driving FWD @ speed.
@@ -66,13 +66,13 @@ def turn_to_abs(target_angle):
     turn_complete = False
     while not turn_complete:
         while heading_error > 2:
-            spd = heading_error / 3 + 40
+            spd = heading_error + 40
             car.spin(spd)
             heading_error = relative_bearing(target)
             logger.debug(f"relative heading: {heading_error} deg")
         car.stop_wheels()
         while heading_error < -2:
-            spd = heading_error / 3 - 40
+            spd = heading_error - 40
             car.spin(spd)
             heading_error = relative_bearing(target)
             logger.debug(f"heading error: {heading_error} deg")
@@ -123,8 +123,8 @@ class Trip():
         self.theta = 0  # Angle to next target (CCW from car X axis)
         self.drive_dist = 0  # Distance to target point
         self.rel_trgt_pnt = (0, 0)  # target point (CCS)
-        self.waypoints = [self.posn,]  # list of waypoints visited
-        self.COAST_DIST = 10  # coast dist (cm) after wheels stopped
+        self.waypoints = []  # list of waypoints visited
+        self.COAST_DIST = 15  # coast dist (cm) after wheels stopped
         self.log = TripLog()
 
     def complete_one_leg(self):
@@ -192,12 +192,13 @@ class Trip():
         """Drive forward self.drive_dist toward target,
         updating self.posn incrementally along the way."""
         car.reset_odometer()
+        time.sleep(1)
         prev_dist = 0
         waypoints = []
         self.log.addline(f"Driving {self.drive_dist:.1f} cm.")
         trim = PIDTRIM
         dist_to_go = self.drive_dist - car.odometer
-        print(dist_to_go)
+        print(f"Distance to go: {dist_to_go}")
         while dist_to_go > self.COAST_DIST:
             car.go(spd, FWD, spin=trim)
             # Update self.posn incrementally
@@ -209,8 +210,11 @@ class Trip():
             wx, wy = self.posn
             self.posn = (wx+dx, wy+dy)
             waypoints.append(self.posn)
-            dist_to_go = self.drive_dist - car.odometer
+            odo = car.odometer
+            dist_to_go = self.drive_dist - odo
+            print(f"Odometer: {odo}")
         car.stop_wheels()
+        car.stop_odo_data_flow()
         self.waypoints.extend(waypoints)
         self.log.addline(f"Final heading = {self.heading} deg.")
         self.log.addline()
