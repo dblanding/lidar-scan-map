@@ -116,7 +116,9 @@ class OmniCar():
         flag = False
         while not flag:
             if ser2.in_waiting:
+                #print(f"Bytes in_waiting: {ser2.in_waiting}")
                 in_bytes = ser2.readline()
+                #print(in_bytes)
                 try:
                     in_string = in_bytes.decode("utf-8").rstrip()
                 except UnicodeDecodeError:
@@ -138,7 +140,8 @@ class OmniCar():
         GPIO.output(ODO_RESET_PIN, GPIO.LOW)
         time.sleep(0.01)
         GPIO.output(ODO_RESET_PIN, GPIO.HIGH)
-        logger.debug(f"Odometer reset: value = {self.odometer}")
+        logger.debug("Odometer reset to 0 cm.")
+        ser2.reset_input_buffer()
 
     def _read_serial_data(self):
         """Read and return one line from serial port"""
@@ -413,12 +416,17 @@ if __name__ == "__main__":
     logger.debug(f"Message from Arduino: {from_arduino}")
     car.reset_odometer()
     time.sleep(0.5)
-    car.go(150, 0, spin=PIDTRIM)
     odo = car.odometer
-    while odo < 100:
+    car.go(150, 0, spin=PIDTRIM)
+    print()
+    print("ODO\tLIDAR\tHDG")
+    while odo < 30:
+        hdg = car.heading
         odo = car.odometer
-        print(f"HEADING:\t {car.heading}")
-        print(f"ODOMETER: {odo}")
+        _ = car.read_dist()
+        dist = car.distance
+        print(f"{odo}\t{dist}\t{hdg}")
+
     car.stop_wheels()
     time.sleep(1)
     odo = car.odometer
