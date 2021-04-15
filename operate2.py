@@ -21,17 +21,9 @@ logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 car = oc.OmniCar()
-car.reset_odometer()
 time.sleep(0.5)
 from_arduino = car._read_serial_data()
 logger.info(f"Message from Arduino: {from_arduino}")
-
-def get_rate(speed):
-    """Return rate (cm/sec) for driving FWD @ speed.
-    Determined empirically for carspeed = 200, batt_charge >= 94%
-    and distances from 50 - 200 cm.
-    """
-    return speed*0.155 - 6.5
 
 def normalize_angle(angle):
     """Convert any value of angle to a value between -180 and +180."""
@@ -214,7 +206,6 @@ class Trip():
             dist_to_go = self.drive_dist - odo
             print(f"Odometer: {odo}")
         car.stop_wheels()
-        car.stop_odo_data_flow()
         self.waypoints.extend(waypoints)
         self.log.addline(f"Final heading = {self.heading} deg.")
         self.log.addline()
@@ -226,5 +217,4 @@ if __name__ == "__main__":
     done = False
     while not done:
         done = trip.complete_one_leg()
-
     car.close()

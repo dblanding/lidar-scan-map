@@ -413,7 +413,7 @@ if __name__ == "__main__":
     car = OmniCar()
     time.sleep(0.5)
     from_arduino = car._read_serial_data()
-    logger.debug(f"Message from Arduino: {from_arduino}")
+    logger.info(f"Message from Arduino: {from_arduino}")
     car.reset_odometer()
     time.sleep(0.5)
     odo = car.odometer
