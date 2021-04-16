@@ -44,7 +44,9 @@ def relative_bearing(target):
     bearing of the target is +90 degrees.
     This is consistent with the standard mathematics convention of
     measuring angles in the CCW direction as positive (+)."""
-    rel_brng = int(car.heading - target)
+    hdg = car.heading
+    print(f"HEADING: {hdg}")
+    rel_brng = int(hdg - target)
     return normalize_angle(rel_brng)
 
 def turn_to_abs(target_angle):

@@ -115,6 +115,7 @@ class OmniCar():
         GPIO.output(HDG_RESET_PIN, GPIO.LOW)
         time.sleep(0.01)
         GPIO.output(HDG_RESET_PIN, GPIO.HIGH)
+        time.sleep(1)
         logger.debug("Heading reset to 0 degrees")
     
     def _read_serial_data(self):
