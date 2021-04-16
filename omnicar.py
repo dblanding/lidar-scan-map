@@ -29,15 +29,15 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 
 # Adafruit BNO085 IMU
 imuport = "/dev/serial0"
-uart = serial.Serial(imuport, 115200, timeout=0.1)
+ser0 = serial.Serial(imuport, 115200, timeout=0.1)
 logger.info(f"BNO085 IMU UART port = {imuport}")
-rvc = BNO08x_RVC(uart)
+rvc = BNO08x_RVC(ser0)
 
 #  Bi-directional communication with Arduino
 ports = ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyS0']
 for port in ports:
     if os.path.exists(port):
-        ser0 = serial.Serial(port, 9600, timeout=0.5)
+        ser1 = serial.Serial(port, 9600, timeout=0.5)
         break
     else:
         port = None
@@ -45,18 +45,12 @@ logger.info(f"Arduino communication port = {port}")
 
 # Lidar distance sensor
 lidarport = '/dev/ttyUSB0'
-ser1 = serial.Serial(lidarport, 115200)
+ser2 = serial.Serial(lidarport, 115200)
 logger.info(f"Lidar port = {lidarport}")
 
-# Odometer
-odometerport = '/dev/ttyUSB1'
-ser2 = serial.Serial(odometerport, 9600, timeout=0.1)
-logger.info(f"Odometer port = {odometerport}")
-
-# 16 bit ADC (for encoder values)
+# 16 bit ADC (for odometer & lidar rotor encoder values)
 i2cbus = smbus.SMBus(1)
 adc = Adafruit_ADS1x15.ADS1115()
-GAIN = 1  #ADC gain
 
 # GPIO pin setup
 HDG_RESET_PIN = 18  # Broadcom pin 18 (Pi pin 12)
@@ -93,13 +87,26 @@ class OmniCar():
         self.points = None  # scan data (list of dictionaries)
 
     @property
+    def odometer(self):
+        """Return odometer value in cm."""
+        counts = adc.read_adc(1, gain=1, data_rate=250)
+        return int((counts - 836) * 0.0106)
+
+    def reset_odometer(self):
+        """Reset odometer to 0 cm."""
+        GPIO.output(ODO_RESET_PIN, GPIO.LOW)
+        time.sleep(0.01)
+        GPIO.output(ODO_RESET_PIN, GPIO.HIGH)
+        logger.debug("Odometer reset to 0 cm.")
+
+    @property
     def heading(self):
         """Return instantaneous heading (gyro yaw) in degrees.
 
-        BNO085 sends data @ 100 reading/sec on uart in RVC mode.
+        BNO085 sends data @ 100 reading/sec on ser0 in RVC mode.
         yaw has a range of +/- 180˚ in 0.01˚ increments.
         """
-        uart.reset_input_buffer()  # purge stale data
+        ser0.reset_input_buffer()  # purge stale data
         yaw, *_ = rvc.heading
         return yaw
 
@@ -109,46 +116,13 @@ class OmniCar():
         time.sleep(0.01)
         GPIO.output(HDG_RESET_PIN, GPIO.HIGH)
         logger.debug("Heading reset to 0 degrees")
-
-    def _read_odometer(self):
-        """Request, read and return odometer data as string"""
-        ser2.write('foo\n'.encode())
-        flag = False
-        while not flag:
-            if ser2.in_waiting:
-                #print(f"Bytes in_waiting: {ser2.in_waiting}")
-                in_bytes = ser2.readline()
-                #print(in_bytes)
-                try:
-                    in_string = in_bytes.decode("utf-8").rstrip()
-                except UnicodeDecodeError:
-                    in_string = '0'
-                flag = True
-        return in_string
-
-    @property
-    def odometer(self):
-        """Read odometer data and return value."""
-        start = time.time()
-        odo_str = self._read_odometer()
-        delta = time.time() - start
-        logger.debug(f"Time to run odometer = {delta}")
-        return float(odo_str)
-
-    def reset_odometer(self):
-        """Reset odometer to 0 cm."""
-        GPIO.output(ODO_RESET_PIN, GPIO.LOW)
-        time.sleep(0.01)
-        GPIO.output(ODO_RESET_PIN, GPIO.HIGH)
-        logger.debug("Odometer reset to 0 cm.")
-        ser2.reset_input_buffer()
-
+    
     def _read_serial_data(self):
         """Read and return one line from serial port"""
         in_string = None
         while not in_string:
-            if ser0.in_waiting:
-                in_bytes = ser0.readline()
+            if ser1.in_waiting:
+                in_bytes = ser1.readline()
                 in_string = in_bytes.decode("utf-8").rstrip()
         return in_string
 
@@ -164,10 +138,10 @@ class OmniCar():
         out_string = ",".join(send_data_str)
         out_string += '\n'
         logger.debug(f"String being sent: {out_string}")
-        ser0.write(out_string.encode())
-        #ser0.flush()
+        ser1.write(out_string.encode())
+        #ser1.flush()
         time.sleep(.2)  # wait for incoming sensor data
-        #ser0.reset_input_buffer()
+        #ser1.reset_input_buffer()
         snsr_str = 'No sensor data'
         snsr_str = self._read_serial_data()
         logger.debug(f"serial data read: {snsr_str}")
@@ -241,11 +215,11 @@ class OmniCar():
         n = 0
         while True:
             n += 1
-            bytes_serial = ser1.read(1)
+            bytes_serial = ser2.read(1)
             if bytes_serial[0] == 0x59 and not first:
                 first = True
             elif bytes_serial[0] == 0x59 and first:
-                _ = ser1.read(7)
+                _ = ser2.read(7)
                 n += 7
                 break
         logger.debug(f"Number of bytes read to resync = {n}")
@@ -255,16 +229,16 @@ class OmniCar():
         Return number of bytes waiting on serial port when read.
         """
         # Prior to first read, purge buildup of 'stale' data
-        if ser1.in_waiting > 100:
-            ser1.reset_input_buffer()
+        if ser2.in_waiting > 100:
+            ser2.reset_input_buffer()
 
         # Wait for serial port to accumulate 9 bytes of 'fresh' data
-        while ser1.in_waiting < 9:
+        while ser2.in_waiting < 9:
             time.sleep(.0005)
 
         # Now read 9 bytes of data on serial port
-        counter = ser1.in_waiting
-        bytes_serial = ser1.read(9)
+        counter = ser2.in_waiting
+        bytes_serial = ser2.read(9)
         if bytes_serial[0] == 0x59 and bytes_serial[1] == 0x59:
             distance = bytes_serial[2] + bytes_serial[3]*256
             # subtract module to mirror distance
@@ -279,7 +253,7 @@ class OmniCar():
 
     def get_enc_val(self):
         """Return encoder value from LiDAR rotor angular encoder."""
-        return adc.read_adc(0, gain=GAIN, data_rate=250)
+        return adc.read_adc(0, gain=1, data_rate=250)
 
     def scan_mtr_start(self, spd):
         """Turn scan motor on at speed = spd (int between 0-255)."""
@@ -402,7 +376,6 @@ class OmniCar():
         return target_pnt
 
     def close(self):
-        ser0.close()
         ser1.close()
         ser2.close()
         i2cbus.close()
@@ -416,16 +389,17 @@ if __name__ == "__main__":
     logger.info(f"Message from Arduino: {from_arduino}")
     car.reset_odometer()
     time.sleep(0.5)
-    odo = car.odometer
     car.go(150, 0, spin=PIDTRIM)
     print()
     print("ODO\tLIDAR\tHDG")
-    while odo < 30:
+    odo = car.odometer
+    while odo < 256:
+        _ = car.read_dist()  # read lidar
+        dist = car.distance  # lidar value just read
         hdg = car.heading
         odo = car.odometer
-        _ = car.read_dist()
-        dist = car.distance
         print(f"{odo}\t{dist}\t{hdg}")
+        time.sleep(.5)
 
     car.stop_wheels()
     time.sleep(1)
