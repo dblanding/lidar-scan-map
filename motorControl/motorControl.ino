@@ -147,7 +147,7 @@ String getSubString(String data, char separator, int index) {
 void setup()
 {
   Serial.begin(9600); // For communication w/ controlling computer
-  Serial.setTimeout(50);
+  Serial.setTimeout(10);
   while (!Serial) {
     ; // wait for serial port to connect.
   }
@@ -188,15 +188,8 @@ void loop() {
   if (Serial.available() > 0) {
     // Read incoming string from RasPi
     String inString = Serial.readString();
-    delay(10);
-    // Send sensor data to RasPi
-    Serial.print(FrontSensor);
-    Serial.print(",");
-    Serial.print("0"); //(LeftSensor);
-    Serial.print(",");
-    Serial.println("0"); //(RightSensor);
-    Serial.flush(); // Waits for outgoing serial data to be sent
-    
+    // send acknowledgement back to RasPi
+    Serial.println("100,0,0");
     // Parse incoming data and command motors accordingly
     String str0 = getSubString(inString, ',', 0);
     String str1 = getSubString(inString, ',', 1);

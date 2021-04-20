@@ -115,7 +115,7 @@ class OmniCar():
         GPIO.output(HDG_RESET_PIN, GPIO.LOW)
         time.sleep(0.01)
         GPIO.output(HDG_RESET_PIN, GPIO.HIGH)
-        time.sleep(1)
+        time.sleep(0.5)
         logger.debug("Heading reset to 0 degrees")
     
     def _read_serial_data(self):
@@ -141,13 +141,13 @@ class OmniCar():
         logger.debug(f"String being sent: {out_string}")
         ser1.write(out_string.encode())
         #ser1.flush()
-        time.sleep(.2)  # wait for incoming sensor data
+        #time.sleep(.2)  # wait for incoming sensor data
         #ser1.reset_input_buffer()
         snsr_str = 'No sensor data'
         snsr_str = self._read_serial_data()
-        logger.debug(f"serial data read: {snsr_str}")
-        distances = [int(item) for item in snsr_str.split(',')]
-        return distances
+        #print(f"serial data read: {snsr_str}")
+        #distances = [int(item) for item in snsr_str.split(',')]
+        return snsr_str
 
     def get_sensor_data(self):
         """Get sensor data from Arduino without affecting motors.
@@ -390,20 +390,30 @@ if __name__ == "__main__":
     logger.info(f"Message from Arduino: {from_arduino}")
     car.reset_odometer()
     time.sleep(0.5)
+    n = 0
+    while n < 100:
+        print(car.heading)
+        n+= 1
+
+    '''
     car.go(150, 0, spin=PIDTRIM)
     print()
     print("ODO\tLIDAR\tHDG")
     odo = car.odometer
-    while odo < 256:
+    n = 0
+    while odo < 100:
+        n += 1
         _ = car.read_dist()  # read lidar
         dist = car.distance  # lidar value just read
         hdg = car.heading
         odo = car.odometer
         print(f"{odo}\t{dist}\t{hdg}")
-        time.sleep(.5)
+        print(n)
+        #time.sleep(.5)
 
     car.stop_wheels()
     time.sleep(1)
     odo = car.odometer
     print(f"ODOMETER: {odo}")
+    '''
     car.close()

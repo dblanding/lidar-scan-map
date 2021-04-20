@@ -45,7 +45,6 @@ def relative_bearing(target):
     This is consistent with the standard mathematics convention of
     measuring angles in the CCW direction as positive (+)."""
     hdg = car.heading
-    print(f"HEADING: {hdg}")
     rel_brng = int(hdg - target)
     return normalize_angle(rel_brng)
 
@@ -59,19 +58,24 @@ def turn_to_abs(target_angle):
     logger.debug(f"relative heading: {heading_error} deg")
     turn_complete = False
     while not turn_complete:
-        while heading_error > 2:
-            spd = heading_error + 40
-            car.spin(spd)
-            heading_error = relative_bearing(target)
-            logger.debug(f"relative heading: {heading_error} deg")
-        car.stop_wheels()
-        while heading_error < -2:
-            spd = heading_error - 40
-            car.spin(spd)
-            heading_error = relative_bearing(target)
-            logger.debug(f"heading error: {heading_error} deg")
-        car.stop_wheels()
+        if heading_error > 2:
+            spd = 60
+            foo = car.spin(spd)
+            print(foo)
+            while heading_error > 2:
+                heading_error = relative_bearing(target)
+                print(f"relative heading: {heading_error} deg")
+            car.stop_wheels()
+        if heading_error < -2:
+            spd = -60
+            foo = car.spin(spd)
+            print(foo)
+            while heading_error < -2:
+                heading_error = relative_bearing(target)
+                print(f"heading error: {heading_error} deg")
+            car.stop_wheels()
         heading_error = relative_bearing(target)
+        print(f"Heading Error = {heading_error}")
         if -2 <= abs(heading_error) <= 2:
             turn_complete = True
 
@@ -219,4 +223,5 @@ if __name__ == "__main__":
     done = False
     while not done:
         done = trip.complete_one_leg()
+
     car.close()
