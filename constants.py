@@ -14,7 +14,7 @@ RGT = -90  # right drive direction
 KP = 0.6  # steering PID proportional coefficient
 KI = 0.1  # steering PID integral coefficient
 KD = 1.5  # steering PID derivative coefficient
-PIDTRIM = 13  # default value for spin trim
+PIDTRIM = 12  # default value for spin trim
 PIDWIN = 6  # number of values to use in rolling average
 
 # Scan related parameters
