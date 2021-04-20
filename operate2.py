@@ -59,7 +59,7 @@ def turn_to_abs(target_angle):
     turn_complete = False
     while not turn_complete:
         if heading_error > 2:
-            spd = 60
+            spd = 50
             foo = car.spin(spd)
             print(foo)
             while heading_error > 2:
@@ -67,7 +67,7 @@ def turn_to_abs(target_angle):
                 print(f"relative heading: {heading_error} deg")
             car.stop_wheels()
         if heading_error < -2:
-            spd = -60
+            spd = -50
             foo = car.spin(spd)
             print(foo)
             while heading_error < -2:
@@ -130,7 +130,7 @@ class Trip():
         self.nmbr += 1
         self.log.addplot(self.nmbr)
         self.log.addline(f"Leg {self.nmbr}")
-        self.log.addline(f"Coords: {self.posn}")
+        self.log.addline(f"Starting Coords: {self.posn}")
         self.waypoints.append(self.posn)
         self.scan_plan()
         self.show_map()
@@ -149,6 +149,8 @@ class Trip():
         # convert target_pnt to dist, theta for turn & drive
         dist, theta = geo.r2p(self.rel_trgt_pnt)
         self.theta = normalize_angle(theta)
+        if dist > 240:  # odometer only goes to 255
+            dist = 240
         self.drive_dist = dist
 
     def show_map(self):
@@ -178,13 +180,18 @@ class Trip():
 
     def turn(self):
         """Turn to target heading, update self.heading"""
+        target_hdg = car.heading - self.theta
         if self.theta < 0:
-            self.log.addline(f"Turning Right {-self.theta} deg.")
+            msg = f"Turning Right {-self.theta} deg "
+            msg += f"to heading {target_hdg}"
+            self.log.addline(msg)
         else:
-            self.log.addline(f"Turning Left {self.theta} deg.")
-        turn_to_abs(car.heading - self.theta)
+            msg = f"Turning Left {self.theta} deg "
+            msg += f"to heading {target_hdg}"
+            self.log.addline(msg)
+        turn_to_abs(target_hdg)
         self.heading = -car.heading
-        self.log.addline(f"Heading after turn: {self.heading} deg.")
+        self.log.addline(f"Heading after turn: {car.heading} deg.")
 
     def drive_to_target(self, spd=CARSPEED):
         """Drive forward self.drive_dist toward target,
@@ -213,8 +220,9 @@ class Trip():
             print(f"Odometer: {odo}")
         car.stop_wheels()
         self.waypoints.extend(waypoints)
-        self.log.addline(f"Final heading = {self.heading} deg.")
-        self.log.addline()
+        self.heading = -car.heading
+        self.log.addline(f"Heading after drive: {car.heading} deg.")
+        self.log.addline(f"Ending Coords = {self.posn}")
 
 
 if __name__ == "__main__":
