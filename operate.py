@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
+MAX_TURN_DITHER = 4  # Theshold for limiting dither in turning
 MAX_HDG_ERR = 3  # Threshold max heading error for complete turn
 
 car = oc.OmniCar()
@@ -67,9 +68,13 @@ def turn_to_abs(target_angle):
     heading_error = -relative_bearing(target)
     logger.debug(f"relative heading: {heading_error} deg")
     turn_complete = False
+    times_thru_loop = 0
+    spd = 50
     while not turn_complete:
+        times_thru_loop += 1
+        if times_thru_loop > MAX_TURN_DITHER:
+            spd = 40
         if heading_error > MAX_HDG_ERR:
-            spd = 50
             foo = car.spin(spd)
             print(foo)
             while heading_error > MAX_HDG_ERR:
@@ -77,8 +82,7 @@ def turn_to_abs(target_angle):
                 print(f"relative heading: {heading_error} deg")
             car.stop_wheels()
         if heading_error < -MAX_HDG_ERR:
-            spd = -50
-            foo = car.spin(spd)
+            foo = car.spin(-spd)
             print(foo)
             while heading_error < -MAX_HDG_ERR:
                 heading_error = -relative_bearing(target)
