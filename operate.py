@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
+MAX_HDG_ERR = 3  # Threshold max heading error for complete turn
+
 car = oc.OmniCar()
 time.sleep(0.5)
 from_arduino = car._read_serial_data()
@@ -66,25 +68,25 @@ def turn_to_abs(target_angle):
     logger.debug(f"relative heading: {heading_error} deg")
     turn_complete = False
     while not turn_complete:
-        if heading_error > 2:
+        if heading_error > MAX_HDG_ERR:
             spd = 50
             foo = car.spin(spd)
             print(foo)
-            while heading_error > 2:
+            while heading_error > MAX_HDG_ERR:
                 heading_error = -relative_bearing(target)
                 print(f"relative heading: {heading_error} deg")
             car.stop_wheels()
-        if heading_error < -2:
+        if heading_error < -MAX_HDG_ERR:
             spd = -50
             foo = car.spin(spd)
             print(foo)
-            while heading_error < -2:
+            while heading_error < -MAX_HDG_ERR:
                 heading_error = -relative_bearing(target)
                 print(f"heading error: {heading_error} deg")
             car.stop_wheels()
         heading_error = -relative_bearing(target)
         print(f"Heading Error = {heading_error}")
-        if -2 <= abs(heading_error) <= 2:
+        if -MAX_HDG_ERR <= abs(heading_error) <= MAX_HDG_ERR:
             turn_complete = True
 
 def R_xform(pnt, angle):

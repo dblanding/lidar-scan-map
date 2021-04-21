@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
+SECTOR_WIDTH = 18  # Minimum value for open sectors
+RADIUS_FACTOR = 1.2  # Used when finding open sectors
+
 # Adafruit BNO085 IMU
 imuport = "/dev/serial0"
 ser0 = serial.Serial(imuport, 115200, timeout=0.1)
@@ -343,7 +346,7 @@ class OmniCar():
     def auto_detect_open_sector(self):
         """ Under development...
         First find average (non-zero) dist value.
-        Then look for sectors at radius = 1.5 * average.
+        Then look for sectors at radius = factor * average.
         Put target near mid-angle a little past radius/2.
         Convert to (x, y) coords and return it.
         """
@@ -352,9 +355,10 @@ class OmniCar():
                  for point in self.points
                  if point.get('dist') != -VLEG]
         avgdist = sum(rvals)/len(rvals)
+        print(f"Average radius = {avgdist}")
 
         # make radius somewhat larger
-        radius = avgdist * 1.5
+        radius = avgdist * RADIUS_FACTOR
         logger.debug(f"Sector detection radius: {int(radius)}")
         sectors = self.open_sectors(radius)
         logger.debug(f"Open sectors: {sectors}")
@@ -362,7 +366,7 @@ class OmniCar():
         # Find first sector of reaonable width
         for sector in sectors:
             angle0, angle1 = sector
-            if (angle0 - angle1) > 12:
+            if (angle0 - angle1) > SECTOR_WIDTH:
                 target_angle = (angle0 + angle1) * 0.48
                 target_pnt = geo.p2r(radius*.8, target_angle)
                 break
