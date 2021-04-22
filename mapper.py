@@ -15,7 +15,7 @@ def load_base_map(filename=None):
     """
 
     if not filename:
-        filename = 'map.pkl'
+        filename = 'map-k.pkl'
     with open(filename, 'rb') as file:
         data = pickle.load(file)
 
@@ -28,8 +28,8 @@ def load_base_map(filename=None):
     return coordlist
 
 def plot(scanpoints, map_lines=None, target=None, waypoints=None,
-         carspot=None, map_folder="Maps", seq_nmbr=None, show=True,
-         display_all_points=True):
+         carspot=None, map_folder="Maps", seq_nmbr=None,
+         show=True, display_all_points=True):
     """Plot all points and line segments and save in map_folder.
 
     Optional args:

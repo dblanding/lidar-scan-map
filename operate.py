@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
-MAX_TURN_DITHER = 4  # Theshold for limiting dither in turning
-MAX_HDG_ERR = 3  # Threshold max heading error for complete turn
+MAX_TURN_DITHER = 3  # Theshold for limiting dither in turning
+MAX_HDG_ERR = 2  # Threshold max heading error for complete turn
 
 car = oc.OmniCar()
 time.sleep(0.5)
@@ -151,13 +151,30 @@ class Trip():
         self.waypoints.append(self.posn)
         self.scan_plan()
         self.show_map()
-        char = input("Enter y to continue: ")
-        if char not in "yY":  # end of trip
+        decision = self.decide()
+        if decision == 'quit':
             self.log.write()
             return True
         self.turn()
         self.drive_to_target()
         return False
+
+    def decide(self):
+        """Decide based on user input"""
+        char = input("Enter p to proceed, t to turn, q to quit: ")
+        if char in "tT":  # turn
+            theta = float(input("enter CCW angle(deg): "))
+            self.turn(theta)
+            self.scan_plan()
+            self.show_map()
+            self.decide()
+        elif char in "pP":  # proceed
+            return 'proceed'
+        elif char in 'qQ':
+            return 'quit'
+        else:
+            print(f"You entered {char}. Try again.")
+            self.decide()
 
     def scan_plan(self):
         """Scan and compute target in open sector."""
@@ -196,15 +213,17 @@ class Trip():
                     carspot=self.posn,
                     seq_nmbr=self.nmbr)
 
-    def turn(self):
-        """Turn to (absolute) target heading"""
-        target_hdg = car.heading - self.theta
-        if self.theta < 0:
-            msg = f"Turning Right {-self.theta} deg "
+    def turn(self, theta=None):
+        """Turn to (relative) target heading"""
+        if not theta:
+            theta = self.theta
+        target_hdg = car.heading - theta
+        if theta < 0:
+            msg = f"Turning Right {-theta} deg "
             msg += f"to heading {target_hdg}"
             self.log.addline(msg)
         else:
-            msg = f"Turning Left {self.theta} deg "
+            msg = f"Turning Left {theta} deg "
             msg += f"to heading {target_hdg}"
             self.log.addline(msg)
         turn_to_abs(target_hdg)
@@ -237,6 +256,10 @@ class Trip():
             print(f"Odometer: {odo}")
         car.stop_wheels()
         self.log.addline(f"Distance driven: {car.odometer} cm.")
+        # Just plot every third waypoint
+        waypoints = [waypoint
+                     for idx, waypoint in enumerate(waypoints)
+                     if not idx % 3]
         self.waypoints.extend(waypoints)
         self.log.addline(f"Heading after drive: {car.heading} deg.")
         self.log.addline(f"Ending Coords: {integerize(self.posn)}")
