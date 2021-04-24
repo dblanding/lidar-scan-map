@@ -421,6 +421,6 @@ if __name__ == "__main__":
     logger.info(f"Message from Arduino: {from_arduino}")
     car.reset_odometer()
     time.sleep(0.5)
-    test_hdg(100)
-    #test_sensors(100)
+    #test_hdg(100)
+    test_sensors(240)
     car.close()

@@ -9,7 +9,7 @@ import logging
 import math
 import sys
 import time
-from constants import CARSPEED, FWD, SONAR_STOP, PIDTRIM
+from constants import CARSPEED, FWD, PIDTRIM, PIDWIN, KP, KI, KD
 import geom_utils as geo
 import mapper
 import omnicar as oc
@@ -93,6 +93,26 @@ def turn_to_abs(target_angle):
         if -MAX_HDG_ERR <= abs(heading_error) <= MAX_HDG_ERR:
             turn_complete = True
 
+def drive_ahead(dist, spd=None):
+    """Drive dist and stop."""
+    if not spd:
+        spd = CARSPEED
+    # instantiate PID steering
+    target = int(car.heading)
+    pid = PID(target)
+
+    # drive
+    odo = car.odometer
+    while odo < dist:
+        odo = car.odometer
+        print(odo)
+        car.go(spd, FWD, spin=pid.trim())
+    car.stop_wheels()
+    time.sleep(0.5)
+    odo = car.odometer
+    print(f"Final odometer: {odo}")
+    
+
 def R_xform(pnt, angle):
     """Transform point by rotation angle (degrees) CW about the origin."""
     r, theta = geo.r2p(pnt)
@@ -121,6 +141,52 @@ def integerize(coords):
     return (int(x), int(y))
 
 
+class PID():
+    """
+    Closed loop compass feedback used to adjust steering trim underway.
+    """
+
+    def __init__(self, target):
+        """ Instantiate PID object before entering loop.
+
+        target is the target heading in degrees."""
+        self.target = target
+        self.prev_error = 0
+        self.trimval = PIDTRIM
+        # create a rolling list of previous error values
+        self.initial = 1
+        self.rwl = [self.initial] * PIDWIN  # rolling window list
+
+    def _get_integral_error(self, hdg_err):
+        """Return rolling average error."""
+        self.rwl.insert(0, hdg_err)
+        self.rwl.pop()
+        return sum(self.rwl) / len(self.rwl)
+
+    def trim(self):
+        """Return trim value to steer toward target."""
+        target = normalize_angle(self.target)
+        logger.debug(f"Normalized angle: {target} deg")
+        # To avoid the complication of the -180 / +180 transition,
+        # convert problem to one of aiming for a target at 0 degrees.
+        # If the target relative bearing is neg, heading error is pos.
+        heading_error = -relative_bearing(target)
+        logger.debug(f"relative heading: {heading_error} deg")
+        p_term = heading_error * KP
+        i_term = self._get_integral_error(heading_error) * KI
+        d_term = (heading_error - self.prev_error) * KD
+        self.prev_error = heading_error
+        adjustment = int((p_term + i_term + d_term))
+        self.trimval += adjustment
+        pstr = f"P: {p_term:.2f}\t"
+        istr = f"I: {i_term:.2f}\t"
+        dstr = f"D: {d_term:.2f}\t"
+        tstr = f"Trim: {self.trimval:.2f}\t"
+        hstr = f"HDG-Error: {heading_error:.0f}"
+        logger.debug(pstr + istr + dstr + tstr + hstr)
+        return self.trimval
+
+
 class Trip():
     """Scan, plan, map & drive multi-leg trip.
 
@@ -139,7 +205,7 @@ class Trip():
         self.drive_dist = 0  # Distance to target point
         self.rel_trgt_pnt = (0, 0)  # target point (CCS)
         self.waypoints = []  # list of waypoints visited
-        self.COAST_DIST = 15  # coast dist (cm) after wheels stopped
+        self.COAST_DIST = 35  # coast dist (cm) after wheels stopped
         self.log = TripLog()
 
     def complete_one_leg(self):
@@ -229,19 +295,24 @@ class Trip():
         turn_to_abs(target_hdg)
         self.log.addline(f"Heading after turn: {car.heading} deg.")
 
-    def drive_to_target(self, spd=CARSPEED):
+    def drive_to_target(self, spd=None):
         """Drive forward self.drive_dist toward target,
         updating self.posn incrementally along the way."""
+        if not spd:
+            spd = CARSPEED
+        # instantiate PID steering
+        target = int(car.heading)
+        pid = PID(target)
+        
         car.reset_odometer()
-        time.sleep(1)
+        time.sleep(0.5)
         prev_dist = 0
         waypoints = []
         self.log.addline(f"Distance to target: {self.drive_dist:.1f} cm.")
-        trim = PIDTRIM
         dist_to_go = self.drive_dist - car.odometer
         print(f"Distance to go: {dist_to_go}")
         while dist_to_go > self.COAST_DIST:
-            car.go(spd, FWD, spin=trim)
+            car.go(spd, FWD, spin=pid.trim())
             # Update self.posn incrementally
             curr_dist = car.odometer
             incr_dist = curr_dist - prev_dist
@@ -255,6 +326,7 @@ class Trip():
             dist_to_go = self.drive_dist - odo
             print(f"Odometer: {odo}")
         car.stop_wheels()
+        time.sleep(0.5)
         self.log.addline(f"Distance driven: {car.odometer} cm.")
         # Just plot every third waypoint
         waypoints = [waypoint
@@ -266,9 +338,13 @@ class Trip():
 
 
 if __name__ == "__main__":
-
+    '''
+    car.reset_odometer()
+    drive_ahead(200)
+    '''
     trip = Trip()
     done = False
     while not done:
         done = trip.complete_one_leg()
+    
     car.close()
