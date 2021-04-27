@@ -87,19 +87,30 @@ class OmniCar():
     def __init__(self):
         self.distance = 0  # last measured distance (cm) from lidar
         self.points = None  # scan data (list of dictionaries)
+        self.ODOMETER_OFFSET = 136
+        
 
     @property
     def odometer(self):
         """Return odometer value in cm."""
         counts = adc.read_adc(1, gain=1, data_rate=250)
         # Formula below found empirically
-        return int((counts - 210) * 0.0106)
+        return int((counts - self.ODOMETER_OFFSET) * 0.0106)
 
     def reset_odometer(self):
         """Reset odometer to 0 cm."""
         GPIO.output(ODO_RESET_PIN, GPIO.LOW)
         time.sleep(0.01)
         GPIO.output(ODO_RESET_PIN, GPIO.HIGH)
+        time.sleep(0.1)
+        counts = adc.read_adc(1, gain=1, data_rate=250)  # throw out
+        time.sleep(0.1)
+        counts = adc.read_adc(1, gain=1, data_rate=250)  # use 2nd read
+        offset = self.ODOMETER_OFFSET
+        null = counts - offset
+        if null:
+            offset = -null
+            self.ODOMETER_OFFSET = offset
         logger.debug("Odometer reset to 0 cm.")
 
     @property

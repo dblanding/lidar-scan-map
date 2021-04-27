@@ -237,7 +237,7 @@ class Trip():
                 self.show_map()
             elif char in "pP":  # proceed
                 return 'proceed'
-            elif char in 'qQ':
+            elif char in 'qQ':  # quit
                 return 'quit'
             else:
                 print(f"You entered {char}. Try again.")
