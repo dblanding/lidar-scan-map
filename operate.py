@@ -102,11 +102,12 @@ def drive_ahead(dist, spd=None):
     pid = PID(target)
 
     # drive
-    odo = car.odometer
+    odo = 0
     while odo < dist:
-        odo = car.odometer
-        print(odo)
+        print(f"ODO = {odo}")
         car.go(spd, FWD, spin=pid.trim())
+        odo = car.odometer
+
     car.stop_wheels()
     time.sleep(0.5)
     odo = car.odometer
@@ -205,7 +206,7 @@ class Trip():
         self.drive_dist = 0  # Distance to target point
         self.rel_trgt_pnt = (0, 0)  # target point (CCS)
         self.waypoints = []  # list of waypoints visited
-        self.COAST_DIST = 35  # coast dist (cm) after wheels stopped
+        self.COAST_DIST = 25  # dist_to_go value to stop wheels
         self.log = TripLog()
 
     def complete_one_leg(self):
@@ -227,20 +228,19 @@ class Trip():
 
     def decide(self):
         """Decide based on user input"""
-        char = input("Enter p to proceed, t to turn, q to quit: ")
-        if char in "tT":  # turn
-            theta = float(input("enter CCW angle(deg): "))
-            self.turn(theta)
-            self.scan_plan()
-            self.show_map()
-            self.decide()
-        elif char in "pP":  # proceed
-            return 'proceed'
-        elif char in 'qQ':
-            return 'quit'
-        else:
-            print(f"You entered {char}. Try again.")
-            self.decide()
+        while True:
+            char = input("Enter p to proceed, t to turn, q to quit: ")
+            if char in "tT":  # turn
+                theta = float(input("enter CCW angle(deg): "))
+                self.turn(theta)
+                self.scan_plan()
+                self.show_map()
+            elif char in "pP":  # proceed
+                return 'proceed'
+            elif char in 'qQ':
+                return 'quit'
+            else:
+                print(f"You entered {char}. Try again.")
 
     def scan_plan(self):
         """Scan and compute target in open sector."""
@@ -305,11 +305,13 @@ class Trip():
         pid = PID(target)
         
         car.reset_odometer()
-        time.sleep(0.5)
+        time.sleep(0.1)
+        # throw away first reading
+        print(f"First odo reading after reset = {car.odometer}")
         prev_dist = 0
         waypoints = []
         self.log.addline(f"Distance to target: {self.drive_dist:.1f} cm.")
-        dist_to_go = self.drive_dist - car.odometer
+        dist_to_go = self.drive_dist
         print(f"Distance to go: {dist_to_go}")
         while dist_to_go > self.COAST_DIST:
             car.go(spd, FWD, spin=pid.trim())
@@ -327,6 +329,12 @@ class Trip():
             print(f"Odometer: {odo}")
         car.stop_wheels()
         time.sleep(0.5)
+        curr_dist = car.odometer
+        incr_dist = curr_dist - prev_dist
+        dx, dy = geo.p2r(incr_dist, hdg)
+        wx, wy = self.posn
+        self.posn = (wx+dx, wy+dy)
+        waypoints.append(self.posn)
         self.log.addline(f"Distance driven: {car.odometer} cm.")
         # Just plot every third waypoint
         waypoints = [waypoint
@@ -340,7 +348,8 @@ class Trip():
 if __name__ == "__main__":
     '''
     car.reset_odometer()
-    drive_ahead(200)
+    time.sleep(0.1)
+    drive_ahead(100)
     '''
     trip = Trip()
     done = False

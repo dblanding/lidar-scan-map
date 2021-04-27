@@ -1,8 +1,6 @@
 """This program accesses all the motors & sensors of the omni wheel car.
 
-RasPi's USB serial port used for bi-directional communication w/ Arduino.
- * RasPi commands all motors, connected to Arduino's 2 motor shields.
- * HC-S04 sonar sensors, attached to the Arduino, send data back to RasPi.
+RasPi's USB serial port used to send motor drive cammands to Arduino.
 BNO085 IMU attached on RasPi UART RX pin, sends heading data.
 TFminiPlus lidar data attached to FT232 USB serial device.
 Scan rotor angle encoder data via ADC on RasPi I2C bus.
@@ -36,7 +34,7 @@ ser0 = serial.Serial(imuport, 115200, timeout=0.1)
 logger.info(f"BNO085 IMU UART port = {imuport}")
 rvc = BNO08x_RVC(ser0)
 
-#  Bi-directional communication with Arduino
+# Communication with Arduino
 ports = ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyS0']
 for port in ports:
     if os.path.exists(port):
@@ -94,7 +92,8 @@ class OmniCar():
     def odometer(self):
         """Return odometer value in cm."""
         counts = adc.read_adc(1, gain=1, data_rate=250)
-        return int((counts - 836) * 0.0106)
+        # Formula below found empirically
+        return int((counts - 210) * 0.0106)
 
     def reset_odometer(self):
         """Reset odometer to 0 cm."""
@@ -422,5 +421,5 @@ if __name__ == "__main__":
     car.reset_odometer()
     time.sleep(0.5)
     #test_hdg(100)
-    test_sensors(240)
+    test_sensors(100)
     car.close()
