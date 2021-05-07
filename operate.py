@@ -305,8 +305,7 @@ class Trip():
         pid = PID(target)
         
         car.reset_odometer()
-        time.sleep(0.1)
-        # throw away first reading
+        print(f"Odometer offset = {car.ODOMETER_OFFSET}")
         print(f"First odo reading after reset = {car.odometer}")
         prev_dist = 0
         waypoints = []

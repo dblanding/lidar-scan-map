@@ -99,19 +99,18 @@ class OmniCar():
 
     def reset_odometer(self):
         """Reset odometer to 0 cm."""
+        # Ground the reset pin.
         GPIO.output(ODO_RESET_PIN, GPIO.LOW)
-        time.sleep(0.01)
+        time.sleep(0.05)
         GPIO.output(ODO_RESET_PIN, GPIO.HIGH)
-        time.sleep(0.1)
-        counts = adc.read_adc(1, gain=1, data_rate=250)  # throw out
-        time.sleep(0.1)
-        counts = adc.read_adc(1, gain=1, data_rate=250)  # use 2nd read
-        offset = self.ODOMETER_OFFSET
-        null = counts - offset
-        if null:
-            offset = -null
-            self.ODOMETER_OFFSET = offset
-        logger.debug("Odometer reset to 0 cm.")
+        time.sleep(0.5)  # Wait before first reading
+        test_val = adc.read_adc(1, gain=1, data_rate=250)
+        readings = []
+        for n in range(10):
+            readings.append(adc.read_adc(1, gain=1, data_rate=250))
+        avg_count = int(sum(readings) / len(readings))
+        self.ODOMETER_OFFSET = avg_count
+        logger.debug("Odometer reset to 0 cm")
 
     @property
     def heading(self):
@@ -432,5 +431,5 @@ if __name__ == "__main__":
     car.reset_odometer()
     time.sleep(0.5)
     #test_hdg(100)
-    test_sensors(100)
+    test_sensors(10)
     car.close()
