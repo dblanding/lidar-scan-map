@@ -376,7 +376,7 @@ class OmniCar():
         for sector in sectors:
             angle0, angle1 = sector
             if (angle0 - angle1) > SECTOR_WIDTH:
-                target_angle = (angle0 + angle1) * 0.48
+                target_angle = (angle0 + angle1) * 0.5
                 target_pnt = geo.p2r(radius*.8, target_angle)
                 break
         return target_pnt

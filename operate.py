@@ -75,18 +75,18 @@ def turn_to_abs(target_angle):
         if times_thru_loop > MAX_TURN_DITHER:
             spd = 40
         if heading_error > MAX_HDG_ERR:
-            foo = car.spin(spd)
-            print(foo)
+            _ = car.spin(spd)
+            print("Turning CCW")
             while heading_error > MAX_HDG_ERR:
                 heading_error = -relative_bearing(target)
-                print(f"relative heading: {heading_error} deg")
+                #print(f"heading error: {heading_error} deg")
             car.stop_wheels()
         if heading_error < -MAX_HDG_ERR:
-            foo = car.spin(-spd)
-            print(foo)
+            _ = car.spin(-spd)
+            print("Turning CW")
             while heading_error < -MAX_HDG_ERR:
                 heading_error = -relative_bearing(target)
-                print(f"heading error: {heading_error} deg")
+                #print(f"heading error: {heading_error} deg")
             car.stop_wheels()
         heading_error = -relative_bearing(target)
         print(f"Heading Error = {heading_error}")
@@ -246,6 +246,9 @@ class Trip():
         """Scan and compute target in open sector."""
         self.data = car.scan(spd=120)
         self.rel_trgt_pnt = car.auto_detect_open_sector()
+        # show points in a plot (untransfomed)
+        pointlist = [point.get('xy') for point in self.data]
+        mapper.plot_scan(pointlist, self.rel_trgt_pnt)
         # convert target_pnt to dist, theta for turn & drive
         dist, theta = geo.r2p(self.rel_trgt_pnt)
         self.theta = normalize_angle(theta)
@@ -258,6 +261,7 @@ class Trip():
         Also show proposed next target point (yellow),
         current car position (red),
         and previously visited waypoints (green)."""
+        '''
         pscan = proscan2.ProcessScan(self.data)
         longest_regions = pscan.regions_by_length()
         scanpoints = []  # xy coords of points in longest regions
@@ -267,6 +271,9 @@ class Trip():
                 scanpoints.extend(points_in_region)
         # Transform point coordinates from Car CS to Map CS
         # +/- convention for polar angle is opposite to heading
+        '''
+        scanpoints = [point.get('xy')
+                      for point in self.data]
         angle = -normalize_angle(car.heading)
         tx, ty = self.posn
         transformed_pnts = [xform_pnt(point, angle, tx, ty)

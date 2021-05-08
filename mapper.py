@@ -27,6 +27,30 @@ def load_base_map(filename=None):
 
     return coordlist
 
+def plot_scan(pointlist, target=None):
+    """Simple no-frills plot of points in pointlist,
+    but rotated 90 deg CCW so Y axis is straight ahead."""
+    # build data lists to plot scan points
+    xs = []
+    ys = []
+    for point in pointlist:
+        x, y = point
+        # rotate plot 90 deg CCW
+        xs.append(-y)
+        ys.append(x)
+    plt.scatter(xs, ys, color='#003F72')
+    if target:
+        x, y = target
+        # rotate point 90 deg CCW
+        cx = [-y]
+        cy = [x]
+        plt.scatter(cx, cy, color='#FFA500')
+    # show origin at (0, 0)
+    plt.scatter([0], [0], color='#FF0000')
+    plt.axis('equal')
+    plt.show()  # shows interactive plot
+    plt.clf()  # clears previous points & lines
+
 def plot(scanpoints, map_lines=None, target=None, waypoints=None,
          carspot=None, map_folder="Maps", seq_nmbr=None,
          show=True, display_all_points=True):
