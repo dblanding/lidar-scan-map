@@ -260,7 +260,8 @@ class Trip():
     def scan_plan(self):
         """Scan and compute target in open sector."""
         self.data = car.scan(spd=120)
-        self.rel_trgt_pnt = car.auto_detect_open_sector()
+        #self.rel_trgt_pnt = car.auto_detect_open_sector()
+        self.rel_trgt_pnt = car.next_target_point()
         # plot (and save) untransformed scan points
         pointlist = [point.get('xy') for point in self.data
                      if point.get('dist') != -VLEG]

@@ -20,6 +20,7 @@ import Adafruit_ADS1x15
 from adafruit_bno08x_rvc import BNO08x_RVC
 from constants import LEV, HEV, VLEG, PIDTRIM
 import geom_utils as geo
+import pathfwd
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # set to DEBUG | INFO | WARNING | ERROR
@@ -379,6 +380,21 @@ class OmniCar():
                 target_angle = (angle0 + angle1) * 0.5
                 target_pnt = geo.p2r(radius*.8, target_angle)
                 break
+        return target_pnt
+
+    def next_target_point(self):
+        """Find next target point by analyzing scan data for openings."""
+        # Find average (non-zero) dist value
+        rvals = [point.get('dist')
+                 for point in self.points
+                 if point.get('dist') != -VLEG]
+        avgdist = int(sum(rvals)/len(rvals))
+        points = [point.get('xy') for point in self.points
+                  if point.get('dist') != -VLEG]
+        mid_angles = pathfwd.best_paths(points, avgdist)
+        # convert last angle in list to car coords
+        theta = mid_angles[-1] - 90
+        target_pnt = geo.p2r(avgdist, theta)
         return target_pnt
 
     def close(self):
