@@ -321,67 +321,6 @@ class OmniCar():
         self.points = data
         return data
 
-    def open_sectors(self, radius):
-        """Return list of sectors containing no points at dist < radius
-
-        Each open sector is a 2-element tuple of bounding angles (deg)
-        Sectors and angles are in scan order, so largest angles first.
-
-        The idea is to look for a sector of sufficient width to allow
-        the car through, then drive along the center of the sector.
-        """
-        sectors = []
-        in_sector = False
-        n = 0
-        for pnt in self.points:
-            n += 1
-            dist = pnt.get("dist")
-            if not in_sector:
-                if dist < 0 or dist > radius:
-                    start_angle = int(pnt.get("theta") * 180 / math.pi)
-                    end_angle = start_angle
-                    in_sector = True
-            elif in_sector:
-                if dist < 0 or dist > radius:
-                    end_angle = int(pnt.get("theta") * 180 / math.pi)
-                elif dist < radius:
-                    in_sector = False
-                    sector = (start_angle, end_angle)
-                    sectors.append(sector)
-        sector = (start_angle, end_angle)  # final sector?
-        if sector not in set(sectors):
-            sectors.append(sector)
-        return sectors
-
-    def auto_detect_open_sector(self):
-        """ Under development...
-        First find average (non-zero) dist value.
-        Then look for sectors at radius = factor * average.
-        Put target near mid-angle a little past radius/2.
-        Convert to (x, y) coords and return it.
-        """
-        # Find average (non-zero) dist value
-        rvals = [point.get('dist')
-                 for point in self.points
-                 if point.get('dist') != -VLEG]
-        avgdist = sum(rvals)/len(rvals)
-        print(f"Average radius = {avgdist}")
-
-        # make radius somewhat larger
-        radius = avgdist * RADIUS_FACTOR
-        logger.debug(f"Sector detection radius: {int(radius)}")
-        sectors = self.open_sectors(radius)
-        logger.debug(f"Open sectors: {sectors}")
-
-        # Find first sector of reaonable width
-        for sector in sectors:
-            angle0, angle1 = sector
-            if (angle0 - angle1) > SECTOR_WIDTH:
-                target_angle = (angle0 + angle1) * 0.5
-                target_pnt = geo.p2r(radius*.8, target_angle)
-                break
-        return target_pnt
-
     def next_target_point(self):
         """Find next target point by analyzing scan data for openings."""
         # Find average (non-zero) dist value
@@ -392,7 +331,7 @@ class OmniCar():
         points = [point.get('xy') for point in self.points
                   if point.get('dist') != -VLEG]
         mid_angles = pathfwd.best_paths(points, avgdist)
-        # convert last angle in list to car coords
+        # convert last angle in list to xy coords in car coord sys
         theta = mid_angles[-1] - 90
         target_pnt = geo.p2r(avgdist, theta)
         return target_pnt

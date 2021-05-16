@@ -211,18 +211,6 @@ class Trip():
         self.waypoints = []  # list of waypoints visited
         self.COAST_DIST = 25  # dist_to_go value to stop wheels
         self.log = TripLog()
-        self.erase_points()
-
-    def erase_points(self):
-        """purge old pointlist files"""
-        for f in os.listdir(POINTFOLDER):
-            os.remove(os.path.join(POINTFOLDER, f))
-
-    def save_points(self, pointlist):
-        """Save scanpoints to file (one file for each leg)."""
-        filename = f"{POINTFOLDER}/leg{self.nmbr}.pkl"
-        with open(filename, 'wb') as file:
-            pickle.dump(pointlist, file)
 
     def complete_one_leg(self):
         """Auto sequence multiple legs of trip."""
@@ -258,15 +246,9 @@ class Trip():
                 print(f"You entered {char}. Try again.")
 
     def scan_plan(self):
-        """Scan and compute target in open sector."""
+        """Scan and compute target in left-most open sector."""
         self.data = car.scan(spd=120)
-        #self.rel_trgt_pnt = car.auto_detect_open_sector()
         self.rel_trgt_pnt = car.next_target_point()
-        # plot (and save) untransformed scan points
-        pointlist = [point.get('xy') for point in self.data
-                     if point.get('dist') != -VLEG]
-        mapper.plot_scan(pointlist, self.rel_trgt_pnt)
-        self.save_points(pointlist)
         # convert target_pnt to dist, theta for turn & drive
         dist, theta = geo.r2p(self.rel_trgt_pnt)
         self.theta = normalize_angle(theta)
