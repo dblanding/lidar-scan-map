@@ -200,8 +200,14 @@ class Trip():
     As it moves along each leg of its trip, it tracks its progress to
     each successive waypoint onto a map of its world."""
 
-    def __init__(self):
+    def __init__(self, nmbr_of_legs=None):
         car.reset_heading()
+        if nmbr_of_legs:
+            assert type(nmbr_of_legs) is int
+            self.legs_remaining = nmbr_of_legs
+            self.auto = True
+        else:
+            self.auto = False
         self.nmbr = 0  # Leg number
         self.data = None  # Scan data
         self.posn = (0, 0)  # Position of car (in WCS)
@@ -220,11 +226,19 @@ class Trip():
         self.log.addline(f"Starting Coords: {integerize(self.posn)}")
         self.waypoints.append(self.posn)
         self.scan_plan()
-        self.show_map()
-        decision = self.decide()
-        if decision == 'quit':
-            self.log.write()
-            return True
+        if self.auto:
+            self.show_map(show=False)
+            if self.legs_remaining > 0:
+                self.legs_remaining -= 1
+            else:  # finished -> quit
+                self.log.write()
+                return True
+        else:
+            self.show_map(show=True)
+            decision = self.decide()
+            if decision == 'quit':
+                self.log.write()
+                return True
         self.turn()
         self.drive_to_target()
         return False
@@ -248,7 +262,10 @@ class Trip():
     def scan_plan(self):
         """Scan and compute target in left-most open sector."""
         self.data = car.scan(spd=120)
-        self.rel_trgt_pnt = car.next_target_point()
+        try:
+            self.rel_trgt_pnt = car.next_target_point()
+        except:
+            self.log.write()
         # convert target_pnt to dist, theta for turn & drive
         dist, theta = geo.r2p(self.rel_trgt_pnt)
         self.theta = normalize_angle(theta)
@@ -256,7 +273,7 @@ class Trip():
             dist = 240
         self.drive_dist = dist
 
-    def show_map(self):
+    def show_map(self, show=False):
         """Show (most salient) scan points overlayed on a map.
         Also show proposed next target point (yellow),
         current car position (red),
@@ -284,7 +301,7 @@ class Trip():
                     waypoints=self.waypoints,
                     target=transformed_target,
                     carspot=self.posn,
-                    seq_nmbr=self.nmbr)
+                    seq_nmbr=self.nmbr, show=show)
 
     def turn(self, theta=None):
         """Turn to (relative) target heading"""
@@ -357,7 +374,8 @@ if __name__ == "__main__":
     time.sleep(0.1)
     drive_ahead(100)
     '''
-    trip = Trip()
+    trip = Trip(12)
+    # trip = Trip()  # for interactive mode
     done = False
     while not done:
         done = trip.complete_one_leg()
