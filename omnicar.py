@@ -328,12 +328,13 @@ class OmniCar():
                  for point in self.points
                  if point.get('dist') != -VLEG]
         avgdist = int(sum(rvals)/len(rvals))
+        dist = avgdist
         points = [point.get('xy') for point in self.points
                   if point.get('dist') != -VLEG]
-        mid_angles = pathfwd.best_paths(points, avgdist)
+        mid_angles = pathfwd.best_paths(points, dist)
         # convert last angle in list to xy coords in car coord sys
         theta = mid_angles[-1] - 90
-        target_pnt = geo.p2r(avgdist, theta)
+        target_pnt = geo.p2r(dist, theta)
         return target_pnt
 
     def close(self):

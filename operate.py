@@ -3,10 +3,11 @@ With omni-wheel vehicle poised in 'Home' position, click 'run'.
 Vehicle will begin a multi-leg trip by computing waypoints in open
 sectors, then pausing at each waypoint to scan & map & repeat. 
 Will follow a generally CCW loop through its environment. 
-Markdown file will be written on completion of trip."""
+Markdown log-file will be written on completion of trip."""
 
 import logging
 import math
+import matplotlib.pyplot as plt
 import os
 import pickle
 import sys
@@ -226,15 +227,16 @@ class Trip():
         self.log.addline(f"Starting Coords: {integerize(self.posn)}")
         self.waypoints.append(self.posn)
         self.scan_plan()
+        self.plot_histogram()
         if self.auto:
-            self.show_map(show=False)
+            self.map(show=False)
             if self.legs_remaining > 0:
                 self.legs_remaining -= 1
             else:  # finished -> quit
                 self.log.write()
                 return True
         else:
-            self.show_map(show=True)
+            self.map(show=True)
             decision = self.decide()
             if decision == 'quit':
                 self.log.write()
@@ -251,7 +253,7 @@ class Trip():
                 theta = float(input("enter CCW angle(deg): "))
                 self.turn(theta)
                 self.scan_plan()
-                self.show_map()
+                self.map(show=True)
             elif char in "pP":  # proceed
                 return 'proceed'
             elif char in 'qQ':  # quit
@@ -266,6 +268,7 @@ class Trip():
             self.rel_trgt_pnt = car.next_target_point()
         except:
             self.log.write()
+            print("Unable to find next target point")
         # convert target_pnt to dist, theta for turn & drive
         dist, theta = geo.r2p(self.rel_trgt_pnt)
         self.theta = normalize_angle(theta)
@@ -273,7 +276,16 @@ class Trip():
             dist = 240
         self.drive_dist = dist
 
-    def show_map(self, show=False):
+    def plot_histogram(self):
+        """Plot histogram of lidar distance values."""
+        dist_list = [pnt['dist']
+                     for pnt in self.data
+                     if pnt['dist'] > 0]
+        plt.hist(dist_list, bins=10)
+        plt.show()
+        plt.clf()
+
+    def map(self, show=False):
         """Show (most salient) scan points overlayed on a map.
         Also show proposed next target point (yellow),
         current car position (red),
@@ -374,8 +386,8 @@ if __name__ == "__main__":
     time.sleep(0.1)
     drive_ahead(100)
     '''
-    trip = Trip(12)
-    # trip = Trip()  # for interactive mode
+    trip = Trip()
+    # trip = Trip(12)  # for auto mode
     done = False
     while not done:
         done = trip.complete_one_leg()
