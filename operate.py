@@ -201,14 +201,16 @@ class Trip():
     As it moves along each leg of its trip, it tracks its progress to
     each successive waypoint onto a map of its world."""
 
-    def __init__(self, nmbr_of_legs=None):
+    def __init__(self, y_min=None, y_max=None):
         car.reset_heading()
-        if nmbr_of_legs:
-            assert type(nmbr_of_legs) is int
-            self.legs_remaining = nmbr_of_legs
-            self.auto = True
+        if y_min:
+            self.y_min = y_min
         else:
-            self.auto = False
+            self.y_min = -500
+        if y_max:
+            self.y_max = y_max
+        else:
+            self.y_max = 500
         self.nmbr = 0  # Leg number
         self.data = None  # Scan data
         self.posn = (0, 0)  # Position of car (in WCS)
@@ -227,22 +229,24 @@ class Trip():
         self.log.addline(f"Starting Coords: {integerize(self.posn)}")
         self.waypoints.append(self.posn)
         self.scan_plan()
-        self.plot_histogram()
-        if self.auto:
-            self.map(show=False)
-            if self.legs_remaining > 0:
-                self.legs_remaining -= 1
-            else:  # finished -> quit
-                self.log.write()
-                return True
-        else:
-            self.map(show=True)
-            decision = self.decide()
-            if decision == 'quit':
-                self.log.write()
-                return True
+        # self.plot_histogram()
+        self.map(show=True)
+        decision = self.decide()
+        if decision == 'quit':
+            self.log.write()
+            return True
         self.turn()
         self.drive_to_target()
+        if self.y_min:
+            x, y = self.posn
+            if y <= self.y_min:
+                self.log.write()
+                return True
+        if self.y_max:
+            x, y = self.posn
+            if y >= self.y_max:
+                self.log.write()
+                return True
         return False
 
     def decide(self):
@@ -348,7 +352,8 @@ class Trip():
         self.log.addline(f"Distance to target: {self.drive_dist:.1f} cm.")
         dist_to_go = self.drive_dist
         print(f"Distance to go: {dist_to_go}")
-        while dist_to_go > self.COAST_DIST:
+        wx, wy = self.posn
+        while dist_to_go > self.COAST_DIST and self.y_min < wy < self.y_max:
             car.go(spd, FWD, spin=pid.trim())
             # Update self.posn incrementally
             curr_dist = car.odometer
@@ -386,10 +391,9 @@ if __name__ == "__main__":
     time.sleep(0.1)
     drive_ahead(100)
     '''
-    trip = Trip()
-    # trip = Trip(12)  # for auto mode
+    trip = Trip(y_max=250)
     done = False
     while not done:
         done = trip.complete_one_leg()
-    
+    turn_to_abs(-90)
     car.close()
